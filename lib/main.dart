@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import 'package:firebase_core/firebase_core.dart';
+import 'login.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,10 +14,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'School Van App',
-      home: Scaffold(
-        appBar: AppBar(title: Text('School Van App')),
-        body: Center(child: Text('Firebase Initialized!')),
-      ),
+      debugShowCheckedModeBanner: false,
+      home: LoginPage(),
     );
   }
 }

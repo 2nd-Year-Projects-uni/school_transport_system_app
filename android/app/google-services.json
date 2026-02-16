@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "178202506405",
+    "project_id": "school-transport-system-6eb9f",
+    "storage_bucket": "school-transport-system-6eb9f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:178202506405:android:96bb433e91b8bbcd59494c",
+        "android_client_info": {
+          "package_name": "com.example.school_van_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBoSCmzBbN_6O5JdiHYBvKOLxKrwAEpJXA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

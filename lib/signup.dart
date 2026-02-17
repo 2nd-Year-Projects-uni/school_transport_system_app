@@ -31,7 +31,7 @@ class _SignupPageState extends State<SignupPage> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        MaterialPageRoute(builder: (context) => const SelectChildPage()),
       );
     } on FirebaseAuthException catch (e) {
       String message = 'Sign up failed';

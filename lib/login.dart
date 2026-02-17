@@ -261,7 +261,7 @@ class _LoginPageState extends State<LoginPage> {
                   child: TextButton(
                     onPressed: _showForgotPasswordDialog,
                     child: const Text(
-                      'Forgot password? Click here',
+                      'Forgot password? ',
                       style: TextStyle(
                         color: Color(0xFF005792), // blue
                         fontWeight: FontWeight.w600,

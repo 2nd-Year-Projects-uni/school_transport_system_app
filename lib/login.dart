@@ -31,7 +31,7 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        MaterialPageRoute(builder: (context) => const SelectChildPage()),
       );
     } on FirebaseAuthException catch (e) {
       String message = 'Login failed';

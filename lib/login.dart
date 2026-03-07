@@ -160,7 +160,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 // Headline
                 Text(
-                  'Stay Connected to Your Child\'s Journey',
+                  'Safe Rides, Peace of Mind',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 26,

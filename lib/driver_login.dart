@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:math' as math;
+import 'services/auth_service.dart';
+import 'driver_interface.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Color scheme (copied from login/signup pages)
 final Color navy = const Color(0xFF001F3F);
@@ -14,6 +19,52 @@ class DriverLoginPage extends StatefulWidget {
 
 class _DriverLoginPageState extends State<DriverLoginPage>
     with SingleTickerProviderStateMixin {
+  void _showForgotPasswordDialog() {
+    final TextEditingController _emailController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Reset Password'),
+          content: TextField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(labelText: 'Enter your email'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                final email = _emailController.text.trim();
+                if (email.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter your email.')),
+                  );
+                  return;
+                }
+                try {
+                  await _authService.resetPassword(email: email);
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Password reset email sent!')),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: ${e.toString()}')),
+                  );
+                }
+              },
+              child: const Text('Send'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   bool _registerObscurePassword = true;
   bool _loginObscurePassword = true;
   late TabController _tabController;
@@ -31,6 +82,10 @@ class _DriverLoginPageState extends State<DriverLoginPage>
       TextEditingController();
   final TextEditingController _loginPasswordController =
       TextEditingController();
+
+  final AuthService _authService = AuthService();
+  bool _isRegisterLoading = false;
+  bool _isLoginLoading = false;
 
   @override
   void initState() {
@@ -51,7 +106,19 @@ class _DriverLoginPageState extends State<DriverLoginPage>
   }
 
   Future<void> _pickLicenseImage(bool isFront) async {
-    // TODO: Implement image picker logic
+    final ImagePicker picker = ImagePicker();
+    final XFile? pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+    );
+    if (pickedFile != null) {
+      setState(() {
+        if (isFront) {
+          _licenseFront = pickedFile;
+        } else {
+          _licenseBack = pickedFile;
+        }
+      });
+    }
   }
 
   @override
@@ -163,7 +230,9 @@ class _DriverLoginPageState extends State<DriverLoginPage>
           decoration: _inputDecoration('Password', Icons.lock_outline).copyWith(
             suffixIcon: IconButton(
               icon: Icon(
-                _registerObscurePassword ? Icons.visibility_off : Icons.visibility,
+                _registerObscurePassword
+                    ? Icons.visibility_off
+                    : Icons.visibility,
                 color: blue,
               ),
               onPressed: () {
@@ -259,17 +328,77 @@ class _DriverLoginPageState extends State<DriverLoginPage>
                 color: Colors.white,
               ),
             ),
-            onPressed: () {
-              // TODO: Implement registration logic
-            },
-            child: const Text(
-              'Register',
-              style: TextStyle(color: Colors.white),
-            ),
+            onPressed: _isRegisterLoading ? null : _registerDriver,
+            child: _isRegisterLoading
+                ? const SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3,
+                    ),
+                  )
+                : const Text('Register', style: TextStyle(color: Colors.white)),
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _registerDriver() async {
+    setState(() => _isRegisterLoading = true);
+    String name = _regNameController.text.trim();
+    String email = _regEmailController.text.trim();
+    String phone = _regPhoneController.text.trim();
+    String password = _regPasswordController.text;
+    // Validations
+    String? error;
+    if (name.isEmpty ||
+        name.length < 3 ||
+        !RegExp(r'^[a-zA-Z ]+$').hasMatch(name)) {
+      error = 'Enter a valid name (min 3 letters).';
+    } else if (email.isEmpty ||
+        !RegExp(r'^[\w\.-]+@[\w\.-]+\.[a-zA-Z]{2,}$').hasMatch(email)) {
+      error = 'Enter a valid email.';
+    } else if (phone.isEmpty || !RegExp(r'^\d{10}$').hasMatch(phone)) {
+      error = 'Phone must be exactly 10 digits.';
+    } else if (password.length < 6 ||
+        !RegExp(r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$').hasMatch(password)) {
+      error =
+          'Password must be at least 6 characters, include a letter and a number.';
+    } else if (_licenseFront == null || _licenseBack == null) {
+      error = 'Please upload both license images.';
+    }
+    if (error != null) {
+      setState(() => _isRegisterLoading = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    try {
+      await _authService.signUpDriver(
+        name: name,
+        email: email,
+        phone: phone,
+        password: password,
+        licenseFront: _licenseFront!,
+        licenseBack: _licenseBack!,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Registration submitted! Await admin approval.'),
+        ),
+      );
+      _tabController.animateTo(1);
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Registration failed:  ')));
+    } finally {
+      if (mounted) setState(() => _isRegisterLoading = false);
+    }
   }
 
   Widget _buildLoginTab(BuildContext context) {
@@ -321,9 +450,7 @@ class _DriverLoginPageState extends State<DriverLoginPage>
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton(
-            onPressed: () {
-              // TODO: Implement forgot password logic
-            },
+            onPressed: _showForgotPasswordDialog,
             child: const Text(
               'Forgot Password?',
               style: TextStyle(
@@ -373,10 +500,17 @@ class _DriverLoginPageState extends State<DriverLoginPage>
                 color: Colors.white,
               ),
             ),
-            onPressed: () {
-              // TODO: Implement login logic
-            },
-            child: const Text('Login', style: TextStyle(color: Colors.white)),
+            onPressed: _isLoginLoading ? null : _loginDriver,
+            child: _isLoginLoading
+                ? const SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3,
+                    ),
+                  )
+                : const Text('Login', style: TextStyle(color: Colors.white)),
           ),
         ),
       ],
@@ -404,5 +538,56 @@ class _DriverLoginPageState extends State<DriverLoginPage>
       ),
       contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
     );
+  }
+
+  Future<void> _loginDriver() async {
+    setState(() => _isLoginLoading = true);
+    String email = _loginEmailPhoneController.text.trim();
+    String password = _loginPasswordController.text;
+    String? error;
+    if (email.isEmpty ||
+        !RegExp(r'^[\w\.-]+@[\w\.-]+\.[a-zA-Z]{2,}$').hasMatch(email)) {
+      error = 'Enter a valid email.';
+    } else if (password.isEmpty) {
+      error = 'Enter your password.';
+    }
+    if (error != null) {
+      setState(() => _isLoginLoading = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    try {
+      UserCredential cred = await _authService.login(
+        email: email,
+        password: password,
+      );
+      // Check if driver is approved
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(cred.user!.uid)
+          .get();
+      if (!doc.exists || doc['userType'] != 'driver') {
+        throw Exception('No driver account found.');
+      }
+      if (doc['approved'] != true) {
+        throw Exception('Your registration is still pending admin approval.');
+      }
+      // TODO: Navigate to driver dashboard/home
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const DriverInterfacePage()),
+      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Login successful!')));
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Login failed:  ')));
+    } finally {
+      if (mounted) setState(() => _isLoginLoading = false);
+    }
   }
 }

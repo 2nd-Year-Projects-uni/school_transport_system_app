@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'signup.dart';
 import 'driver_login.dart';
+import 'vehicle_owner_login.dart';
 import 'services/auth_service.dart';
 import 'home_screen.dart';
 import 'widgets/loading_button.dart';
@@ -347,6 +348,34 @@ class _LoginPageState extends State<LoginPage> {
                           context,
                           MaterialPageRoute(
                             builder: (context) => DriverLoginPage(),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        'Click here',
+                        style: TextStyle(
+                          color: teal,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Are you a vehicle owner?  ',
+                      style: TextStyle(color: navy, fontSize: 16),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const VehicleOwnerLoginPage(),
                           ),
                         );
                       },

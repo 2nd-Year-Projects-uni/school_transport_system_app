@@ -131,7 +131,7 @@ class _DriverLoginPageState extends State<DriverLoginPage>
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
-          'Driver Login & Registration',
+          'Driver',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         bottom: TabBar(

@@ -63,6 +63,32 @@ class AuthService {
     return userCredential;
   }
 
+  Future<UserCredential> signUpVehicleOwner({
+    required String name,
+    required String email,
+    required String phone,
+    required String password,
+  }) async {
+    UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: password.trim(),
+    );
+
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userCredential.user!.uid)
+        .set({
+          'name': name.trim(),
+          'email': email.trim(),
+          'phone': phone.trim(),
+          'userType': 'vehicle_owner',
+          'role': 'Vehicle_Owner',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+    return userCredential;
+  }
+
   Future<UserCredential> login({
     required String email,
     required String password,

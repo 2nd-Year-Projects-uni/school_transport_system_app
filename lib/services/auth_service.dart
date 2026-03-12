@@ -82,7 +82,6 @@ class AuthService {
           'email': email.trim(),
           'phone': phone.trim(),
           'userType': 'vehicle_owner',
-          'role': 'Vehicle_Owner',
           'createdAt': FieldValue.serverTimestamp(),
         });
 

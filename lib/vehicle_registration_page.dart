@@ -9,6 +9,7 @@ import 'services/vehicle_service.dart';
 
 const String _googlePlacesApiKey = String.fromEnvironment(
   'GOOGLE_PLACES_API_KEY',
+  defaultValue: '***REMOVED***',
 );
 
 final Color _navy = const Color(0xFF001F3F);
@@ -154,28 +155,99 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
       return [];
     }
 
-    final Uri uri =
+    // Try Places API (New) first because many keys are now restricted for v1 only.
+    try {
+      final Uri newApiUri = Uri.https(
+        'places.googleapis.com',
+        '/v1/places:autocomplete',
+      );
+      final Map<String, dynamic> payload = <String, dynamic>{
+        'input': schoolSearch ? 'school $trimmedQuery' : trimmedQuery,
+        'languageCode': 'en',
+        'regionCode': 'lk',
+        'includedRegionCodes': <String>['lk'],
+      };
+      if (schoolSearch) {
+        payload['includedPrimaryTypes'] = <String>['school'];
+      }
+
+      final http.Response newApiResponse = await http.post(
+        newApiUri,
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': _googlePlacesApiKey,
+          'X-Goog-FieldMask':
+              'suggestions.placePrediction.place,suggestions.placePrediction.text.text',
+        },
+        body: jsonEncode(payload),
+      );
+
+      if (newApiResponse.statusCode == 200) {
+        final Map<String, dynamic> decoded =
+            jsonDecode(newApiResponse.body) as Map<String, dynamic>;
+        final List<dynamic> suggestions =
+            decoded['suggestions'] as List<dynamic>? ?? [];
+
+        final List<_PlaceSuggestion> mapped = suggestions
+            .map((dynamic item) {
+              final Map<String, dynamic> suggestion =
+                  item as Map<String, dynamic>;
+              final Map<String, dynamic> placePrediction =
+                  suggestion['placePrediction'] as Map<String, dynamic>? ??
+                  <String, dynamic>{};
+              final Map<String, dynamic> text =
+                  placePrediction['text'] as Map<String, dynamic>? ??
+                  <String, dynamic>{};
+              final String placePath =
+                  placePrediction['place'] as String? ?? '';
+
+              return _PlaceSuggestion(
+                description: text['text'] as String? ?? '',
+                // place path looks like "places/ChIJ..."; keep only the id part.
+                placeId: placePath.startsWith('places/')
+                    ? placePath.substring('places/'.length)
+                    : placePath,
+              );
+            })
+            .where((suggestion) => suggestion.description.isNotEmpty)
+            .take(5)
+            .toList();
+
+        if (mapped.isNotEmpty) {
+          return mapped;
+        }
+      }
+    } catch (_) {
+      // Fall back to legacy endpoint below.
+    }
+
+    // Fallback to Places API (Legacy) autocomplete endpoint.
+    final Uri legacyUri =
         Uri.https('maps.googleapis.com', '/maps/api/place/autocomplete/json', {
           'input': schoolSearch ? 'school $trimmedQuery' : trimmedQuery,
           'key': _googlePlacesApiKey,
           'types': schoolSearch ? 'establishment' : 'geocode',
+          'components': 'country:lk',
+          'region': 'lk',
         });
 
-    final http.Response response = await http.get(uri);
-    if (response.statusCode != 200) {
+    final http.Response legacyResponse = await http.get(legacyUri);
+    if (legacyResponse.statusCode != 200) {
       return [];
     }
 
-    final Map<String, dynamic> decoded =
-        jsonDecode(response.body) as Map<String, dynamic>;
-    final String status = decoded['status'] as String? ?? 'UNKNOWN_ERROR';
+    final Map<String, dynamic> decodedLegacy =
+        jsonDecode(legacyResponse.body) as Map<String, dynamic>;
+    final String status = decodedLegacy['status'] as String? ?? 'UNKNOWN_ERROR';
     if (status != 'OK' && status != 'ZERO_RESULTS') {
       return [];
     }
 
     final List<dynamic> predictions =
-        decoded['predictions'] as List<dynamic>? ?? [];
-    final Iterable<_PlaceSuggestion> mapped = predictions.map((dynamic item) {
+        decodedLegacy['predictions'] as List<dynamic>? ?? [];
+    final Iterable<_PlaceSuggestion> mappedLegacy = predictions.map((
+      dynamic item,
+    ) {
       final Map<String, dynamic> prediction = item as Map<String, dynamic>;
       return _PlaceSuggestion(
         description: prediction['description'] as String? ?? '',
@@ -184,10 +256,10 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
     });
 
     if (!schoolSearch) {
-      return mapped.take(5).toList();
+      return mappedLegacy.take(5).toList();
     }
 
-    return mapped
+    return mappedLegacy
         .where((suggestion) {
           final String text = suggestion.description.toLowerCase();
           return text.contains('school') ||

@@ -63,7 +63,7 @@ class _SelectChildPageState extends State<SelectChildPage> {
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
-                    .collection('Students')
+                    .collection('Children')
                     .where('parentId', isEqualTo: parentId)
                     .snapshots(),
                 builder: (context, snapshot) {

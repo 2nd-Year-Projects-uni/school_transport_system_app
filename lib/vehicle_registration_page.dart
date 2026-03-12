@@ -162,7 +162,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
         '/v1/places:autocomplete',
       );
       final Map<String, dynamic> payload = <String, dynamic>{
-        'input': schoolSearch ? 'school $trimmedQuery' : trimmedQuery,
+        'input': trimmedQuery,
         'languageCode': 'en',
         'regionCode': 'lk',
         'includedRegionCodes': <String>['lk'],
@@ -224,7 +224,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
     // Fallback to Places API (Legacy) autocomplete endpoint.
     final Uri legacyUri =
         Uri.https('maps.googleapis.com', '/maps/api/place/autocomplete/json', {
-          'input': schoolSearch ? 'school $trimmedQuery' : trimmedQuery,
+          'input': trimmedQuery,
           'key': _googlePlacesApiKey,
           'types': schoolSearch ? 'establishment' : 'geocode',
           'components': 'country:lk',
@@ -255,20 +255,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
       );
     });
 
-    if (!schoolSearch) {
-      return mappedLegacy.take(5).toList();
-    }
-
-    return mappedLegacy
-        .where((suggestion) {
-          final String text = suggestion.description.toLowerCase();
-          return text.contains('school') ||
-              text.contains('college') ||
-              text.contains('academy') ||
-              text.contains('campus');
-        })
-        .take(5)
-        .toList();
+    return mappedLegacy.take(5).toList();
   }
 
   void _onStartingLocationChanged(String value) {

@@ -1,0 +1,750 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+
+import 'services/vehicle_service.dart';
+
+const String _googlePlacesApiKey = String.fromEnvironment(
+  'GOOGLE_PLACES_API_KEY',
+);
+
+final Color _navy = const Color(0xFF001F3F);
+final Color _blue = const Color(0xFF005792);
+final Color _teal = const Color(0xFF00B894);
+
+class VehicleRegistrationPage extends StatefulWidget {
+  const VehicleRegistrationPage({super.key});
+
+  @override
+  State<VehicleRegistrationPage> createState() =>
+      _VehicleRegistrationPageState();
+}
+
+class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final VehicleService _vehicleService = VehicleService();
+  final ImagePicker _imagePicker = ImagePicker();
+
+  final TextEditingController _registerNumberController =
+      TextEditingController();
+  final TextEditingController _insuranceDateController =
+      TextEditingController();
+  final TextEditingController _startingLocationController =
+      TextEditingController();
+
+  final List<TextEditingController> _schoolControllers = [
+    TextEditingController(),
+  ];
+  final List<List<_PlaceSuggestion>> _schoolSuggestions = [[]];
+  final Map<int, Timer> _schoolSearchTimers = {};
+
+  Timer? _startingLocationSearchTimer;
+  List<_PlaceSuggestion> _startingLocationSuggestions = [];
+  String? _selectedVehicleType;
+  String? _airCondition;
+  DateTime? _insuranceExpiryDate;
+  XFile? _vehiclePhoto;
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _registerNumberController.dispose();
+    _insuranceDateController.dispose();
+    _startingLocationController.dispose();
+    _startingLocationSearchTimer?.cancel();
+    for (final controller in _schoolControllers) {
+      controller.dispose();
+    }
+    for (final timer in _schoolSearchTimers.values) {
+      timer.cancel();
+    }
+    super.dispose();
+  }
+
+  InputDecoration _inputDecoration(
+    String label,
+    IconData icon, {
+    String? hint,
+  }) {
+    return InputDecoration(
+      prefixIcon: Icon(icon, color: _blue),
+      labelText: label,
+      hintText: hint,
+      labelStyle: TextStyle(color: _blue),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: _blue, width: 1.2),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: _blue.withOpacity(0.35)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: _navy, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+    );
+  }
+
+  bool get _canAddAnotherSchool =>
+      _schoolControllers.isNotEmpty &&
+      _schoolControllers.last.text.trim().isNotEmpty;
+
+  Future<void> _pickVehiclePhoto() async {
+    final XFile? pickedFile = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (pickedFile == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _vehiclePhoto = pickedFile;
+    });
+  }
+
+  Future<void> _pickInsuranceDate() async {
+    final DateTime now = DateTime.now();
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _insuranceExpiryDate ?? now,
+      firstDate: now,
+      lastDate: DateTime(now.year + 10),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: _navy,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: _navy,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedDate == null) {
+      return;
+    }
+
+    setState(() {
+      _insuranceExpiryDate = pickedDate;
+      _insuranceDateController.text =
+          '${pickedDate.day.toString().padLeft(2, '0')}/'
+          '${pickedDate.month.toString().padLeft(2, '0')}/'
+          '${pickedDate.year}';
+    });
+  }
+
+  Future<List<_PlaceSuggestion>> _fetchPlaceSuggestions(
+    String query, {
+    required bool schoolSearch,
+  }) async {
+    final String trimmedQuery = query.trim();
+    if (_googlePlacesApiKey.isEmpty || trimmedQuery.length < 2) {
+      return [];
+    }
+
+    final Uri uri =
+        Uri.https('maps.googleapis.com', '/maps/api/place/autocomplete/json', {
+          'input': schoolSearch ? 'school $trimmedQuery' : trimmedQuery,
+          'key': _googlePlacesApiKey,
+          'types': schoolSearch ? 'establishment' : 'geocode',
+        });
+
+    final http.Response response = await http.get(uri);
+    if (response.statusCode != 200) {
+      return [];
+    }
+
+    final Map<String, dynamic> decoded =
+        jsonDecode(response.body) as Map<String, dynamic>;
+    final String status = decoded['status'] as String? ?? 'UNKNOWN_ERROR';
+    if (status != 'OK' && status != 'ZERO_RESULTS') {
+      return [];
+    }
+
+    final List<dynamic> predictions =
+        decoded['predictions'] as List<dynamic>? ?? [];
+    final Iterable<_PlaceSuggestion> mapped = predictions.map((dynamic item) {
+      final Map<String, dynamic> prediction = item as Map<String, dynamic>;
+      return _PlaceSuggestion(
+        description: prediction['description'] as String? ?? '',
+        placeId: prediction['place_id'] as String? ?? '',
+      );
+    });
+
+    if (!schoolSearch) {
+      return mapped.take(5).toList();
+    }
+
+    return mapped
+        .where((suggestion) {
+          final String text = suggestion.description.toLowerCase();
+          return text.contains('school') ||
+              text.contains('college') ||
+              text.contains('academy') ||
+              text.contains('campus');
+        })
+        .take(5)
+        .toList();
+  }
+
+  void _onStartingLocationChanged(String value) {
+    _startingLocationSearchTimer?.cancel();
+    _startingLocationSearchTimer = Timer(
+      const Duration(milliseconds: 350),
+      () async {
+        final List<_PlaceSuggestion> suggestions = await _fetchPlaceSuggestions(
+          value,
+          schoolSearch: false,
+        );
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _startingLocationSuggestions = suggestions;
+        });
+      },
+    );
+  }
+
+  void _onSchoolChanged(int index, String value) {
+    _schoolSearchTimers[index]?.cancel();
+    _schoolSearchTimers[index] = Timer(
+      const Duration(milliseconds: 350),
+      () async {
+        final List<_PlaceSuggestion> suggestions = await _fetchPlaceSuggestions(
+          value,
+          schoolSearch: true,
+        );
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          if (index < _schoolSuggestions.length) {
+            _schoolSuggestions[index] = suggestions;
+          }
+        });
+      },
+    );
+  }
+
+  void _addSchoolField() {
+    setState(() {
+      _schoolControllers.add(TextEditingController());
+      _schoolSuggestions.add([]);
+    });
+  }
+
+  void _removeSchoolField(int index) {
+    if (_schoolControllers.length == 1) {
+      return;
+    }
+
+    _schoolSearchTimers[index]?.cancel();
+    _schoolSearchTimers.remove(index);
+    setState(() {
+      _schoolControllers[index].dispose();
+      _schoolControllers.removeAt(index);
+      _schoolSuggestions.removeAt(index);
+    });
+  }
+
+  Future<void> _submitVehicle() async {
+    final List<String> schools = _schoolControllers
+        .map((controller) => controller.text.trim())
+        .where((school) => school.isNotEmpty)
+        .toList();
+
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_airCondition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select AC or Non-AC.')),
+      );
+      return;
+    }
+
+    if (_insuranceExpiryDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please choose insurance expiry date.')),
+      );
+      return;
+    }
+
+    if (schools.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add at least one school.')),
+      );
+      return;
+    }
+
+    if (_vehiclePhoto == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please upload a vehicle photo.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await _vehicleService.registerVehicle(
+        registerNumber: _registerNumberController.text,
+        vehicleType: _selectedVehicleType!,
+        condition: _airCondition!,
+        insuranceExpiryDate: _insuranceExpiryDate!,
+        startingLocation: _startingLocationController.text,
+        schools: schools,
+        vehiclePhoto: _vehiclePhoto!,
+      );
+
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Vehicle registration failed: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildSuggestionBox(
+    List<_PlaceSuggestion> suggestions, {
+    required ValueChanged<_PlaceSuggestion> onSelected,
+  }) {
+    if (suggestions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _blue.withOpacity(0.18)),
+      ),
+      child: Column(
+        children: suggestions.map((suggestion) {
+          return ListTile(
+            dense: true,
+            leading: Icon(Icons.place_outlined, color: _blue),
+            title: Text(suggestion.description),
+            onTap: () => onSelected(suggestion),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildSchoolField(int index) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _schoolControllers[index],
+                onChanged: (value) => _onSchoolChanged(index, value),
+                decoration: _inputDecoration(
+                  index == 0 ? 'School' : 'School ${index + 1}',
+                  Icons.school_outlined,
+                  hint: 'Search school name',
+                ),
+                validator: index == 0
+                    ? (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Enter at least one school.';
+                        }
+                        return null;
+                      }
+                    : null,
+              ),
+            ),
+            if (index > 0) ...[
+              const SizedBox(width: 10),
+              IconButton(
+                onPressed: () => _removeSchoolField(index),
+                icon: Icon(
+                  Icons.remove_circle_outline,
+                  color: Colors.red.shade400,
+                ),
+                tooltip: 'Remove school',
+              ),
+            ],
+          ],
+        ),
+        _buildSuggestionBox(
+          _schoolSuggestions[index],
+          onSelected: (suggestion) {
+            setState(() {
+              _schoolControllers[index].text = suggestion.description;
+              _schoolSuggestions[index] = [];
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F9FC),
+      appBar: AppBar(
+        title: const Text('Vehicle Registration'),
+        backgroundColor: _navy,
+        foregroundColor: Colors.white,
+      ),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [_navy, _blue],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Register your vehicle',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Add the vehicle details, service areas, schools, and a clear vehicle photo.',
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 22),
+                TextFormField(
+                  controller: _registerNumberController,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: _inputDecoration(
+                    'Vehicle register number',
+                    Icons.confirmation_number_outlined,
+                    hint: 'e.g. WP CAB 1234',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Enter vehicle register number.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: _selectedVehicleType,
+                  dropdownColor: Colors.white,
+                  iconEnabledColor: _blue,
+                  focusColor: Colors.white,
+                  style: TextStyle(color: _navy),
+                  decoration: _inputDecoration(
+                    'Vehicle type',
+                    Icons.directions_bus_outlined,
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'Van', child: Text('Van')),
+                    DropdownMenuItem(value: 'Bus', child: Text('Bus')),
+                    DropdownMenuItem(
+                      value: 'Mini Bus',
+                      child: Text('Mini Bus'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedVehicleType = value;
+                    });
+                  },
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Select vehicle type.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Condition',
+                  style: TextStyle(
+                    color: _blue,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: CheckboxListTile(
+                        value: _airCondition == 'AC',
+                        onChanged: (checked) {
+                          setState(() {
+                            _airCondition = checked == true ? 'AC' : null;
+                          });
+                        },
+                        title: const Text('AC'),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        activeColor: _teal,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        tileColor: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: CheckboxListTile(
+                        value: _airCondition == 'Non-AC',
+                        onChanged: (checked) {
+                          setState(() {
+                            _airCondition = checked == true ? 'Non-AC' : null;
+                          });
+                        },
+                        title: const Text('Non-AC'),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        activeColor: _teal,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        tileColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _insuranceDateController,
+                  readOnly: true,
+                  onTap: _pickInsuranceDate,
+                  decoration: _inputDecoration(
+                    'Insurance expiry date',
+                    Icons.calendar_month_outlined,
+                    hint: 'DD/MM/YYYY',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Choose insurance expiry date.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _startingLocationController,
+                  onChanged: _onStartingLocationChanged,
+                  decoration: _inputDecoration(
+                    'Starting location',
+                    Icons.location_on_outlined,
+                    hint: 'Search starting location',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Enter starting location.';
+                    }
+                    return null;
+                  },
+                ),
+                _buildSuggestionBox(
+                  _startingLocationSuggestions,
+                  onSelected: (suggestion) {
+                    setState(() {
+                      _startingLocationController.text = suggestion.description;
+                      _startingLocationSuggestions = [];
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Schools',
+                  style: TextStyle(
+                    color: _blue,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...List<Widget>.generate(_schoolControllers.length, (index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: _buildSchoolField(index),
+                  );
+                }),
+                if (_canAddAnotherSchool)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _addSchoolField,
+                      icon: Icon(Icons.add_circle_outline, color: _teal),
+                      label: Text(
+                        'Add another school',
+                        style: TextStyle(
+                          color: _teal,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 10),
+                Text(
+                  'Upload vehicle photo',
+                  style: TextStyle(
+                    color: _blue,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _vehiclePhoto == null ? _blue : _teal,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    minimumSize: const Size.fromHeight(52),
+                  ),
+                  onPressed: _pickVehiclePhoto,
+                  icon: const Icon(Icons.upload_file),
+                  label: Text(
+                    _vehiclePhoto == null
+                        ? 'Upload vehicle image'
+                        : 'Vehicle image selected',
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.yellow[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline, color: Colors.orange),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Upload a clear image of the vehicle that visibly shows the vehicle register number. If the register number is not clear, admin approval may be delayed or the vehicle may not be allowed into the system.',
+                          style: TextStyle(fontSize: 14, color: _navy),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_vehiclePhoto != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _teal.withOpacity(0.28)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: _teal),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _vehiclePhoto!.name,
+                            style: TextStyle(
+                              color: _navy,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _navy,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    onPressed: _isSubmitting ? null : _submitVehicle,
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 26,
+                            height: 26,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 3,
+                            ),
+                          )
+                        : const Text('Register Vehicle'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaceSuggestion {
+  const _PlaceSuggestion({required this.description, required this.placeId});
+
+  final String description;
+  final String placeId;
+}

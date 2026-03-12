@@ -44,6 +44,8 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
 
   Timer? _startingLocationSearchTimer;
   List<_PlaceSuggestion> _startingLocationSuggestions = [];
+  bool _startingLocationConfirmed = false;
+  final List<bool> _schoolConfirmed = [false];
   String? _selectedVehicleType;
   String? _airCondition;
   DateTime? _insuranceExpiryDate;
@@ -259,6 +261,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
   }
 
   void _onStartingLocationChanged(String value) {
+    _startingLocationConfirmed = false;
     _startingLocationSearchTimer?.cancel();
     _startingLocationSearchTimer = Timer(
       const Duration(milliseconds: 350),
@@ -278,6 +281,9 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
   }
 
   void _onSchoolChanged(int index, String value) {
+    if (index < _schoolConfirmed.length) {
+      _schoolConfirmed[index] = false;
+    }
     _schoolSearchTimers[index]?.cancel();
     _schoolSearchTimers[index] = Timer(
       const Duration(milliseconds: 350),
@@ -302,6 +308,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
     setState(() {
       _schoolControllers.add(TextEditingController());
       _schoolSuggestions.add([]);
+      _schoolConfirmed.add(false);
     });
   }
 
@@ -316,6 +323,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
       _schoolControllers[index].dispose();
       _schoolControllers.removeAt(index);
       _schoolSuggestions.removeAt(index);
+      _schoolConfirmed.removeAt(index);
     });
   }
 
@@ -430,19 +438,24 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
               child: TextFormField(
                 controller: _schoolControllers[index],
                 onChanged: (value) => _onSchoolChanged(index, value),
+                autovalidateMode: AutovalidateMode.onUnfocus,
                 decoration: _inputDecoration(
                   index == 0 ? 'School' : 'School ${index + 1}',
                   Icons.school_outlined,
                   hint: 'Search school name',
                 ),
-                validator: index == 0
-                    ? (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Enter at least one school.';
-                        }
-                        return null;
-                      }
-                    : null,
+                validator: (value) {
+                  if (index == 0 && (value == null || value.trim().isEmpty)) {
+                    return 'Enter at least one school.';
+                  }
+                  if (value != null &&
+                      value.trim().isNotEmpty &&
+                      index < _schoolConfirmed.length &&
+                      !_schoolConfirmed[index]) {
+                    return 'Select a school from the suggestions.';
+                  }
+                  return null;
+                },
               ),
             ),
             if (index > 0) ...[
@@ -462,6 +475,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
           _schoolSuggestions[index],
           onSelected: (suggestion) {
             setState(() {
+              _schoolConfirmed[index] = true;
               _schoolControllers[index].text = suggestion.description;
               _schoolSuggestions[index] = [];
             });
@@ -640,6 +654,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                 TextFormField(
                   controller: _startingLocationController,
                   onChanged: _onStartingLocationChanged,
+                  autovalidateMode: AutovalidateMode.onUnfocus,
                   decoration: _inputDecoration(
                     'Starting location',
                     Icons.location_on_outlined,
@@ -649,6 +664,9 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                     if (value == null || value.trim().isEmpty) {
                       return 'Enter starting location.';
                     }
+                    if (!_startingLocationConfirmed) {
+                      return 'Select a location from the suggestions.';
+                    }
                     return null;
                   },
                 ),
@@ -656,6 +674,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                   _startingLocationSuggestions,
                   onSelected: (suggestion) {
                     setState(() {
+                      _startingLocationConfirmed = true;
                       _startingLocationController.text = suggestion.description;
                       _startingLocationSuggestions = [];
                     });

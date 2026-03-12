@@ -4,6 +4,10 @@
         android:label="school_van_app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Google Maps & Places API Key -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyCe6dkEVa4XM6I_h8jXCAB3ViHw8RYIECk" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

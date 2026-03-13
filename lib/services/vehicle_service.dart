@@ -15,9 +15,8 @@ class VehicleService {
     }
 
     return _firestore
-        .collection('users')
-        .doc(user.uid)
         .collection('vehicles')
+        .where('ownerId', isEqualTo: user.uid)
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
@@ -36,12 +35,10 @@ class VehicleService {
       throw StateError('No authenticated vehicle owner found.');
     }
 
-    final vehicleRef = _firestore
-        .collection('users')
-        .doc(user.uid)
-        .collection('vehicles')
-        .doc();
+    // Create a new document in the top-level 'vehicles' collection
+    final vehicleRef = _firestore.collection('vehicles').doc();
 
+    // Store the vehicle photo in the same pathing logic for consistency
     final imageRef = _storage.ref().child(
       'vehicle_owners/${user.uid}/vehicles/${vehicleRef.id}.jpg',
     );

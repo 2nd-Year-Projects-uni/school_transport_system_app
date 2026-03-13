@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'attendance_tab.dart';
 import 'd_info_child.dart';
 import 'child_settings.dart';
+import 'c_home_page.dart';
 
 class DashboardPage extends StatefulWidget {
   final String childId;
@@ -136,21 +137,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-// ── HOME TAB ──────────────────────────────────────────────
-class HomeTab extends StatelessWidget {
-  final String childId;
-  final String childName;
-  const HomeTab({super.key, required this.childId, required this.childName});
 
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text("Home\n$childName",
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 16)),
-    );
-  }
-}
 
 // ── MAP TAB ───────────────────────────────────────────────
 class MapTab extends StatelessWidget {

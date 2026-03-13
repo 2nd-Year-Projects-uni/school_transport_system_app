@@ -22,7 +22,7 @@ class VehicleService {
         .snapshots();
   }
 
-  Future<void> registerVehicle({
+  Future<String> registerVehicle({
     required String registerNumber,
     required String vehicleType,
     required String condition,
@@ -57,7 +57,10 @@ class VehicleService {
       'startingLocation': startingLocation.trim(),
       'schools': schools,
       'vehiclePhotoUrl': photoUrl,
+      'status': false,
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    return vehicleRef.id;
   }
 }

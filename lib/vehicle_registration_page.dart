@@ -370,7 +370,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
     });
 
     try {
-      await _vehicleService.registerVehicle(
+      final String vehicleId = await _vehicleService.registerVehicle(
         registerNumber: _registerNumberController.text,
         vehicleType: _selectedVehicleType!,
         condition: _airCondition!,
@@ -383,7 +383,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(vehicleId);
     } catch (error) {
       if (!mounted) {
         return;

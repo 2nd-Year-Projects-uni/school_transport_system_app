@@ -43,16 +43,18 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
   }
 
   Future<void> _openVehicleRegistrationPage() async {
-    final bool? registered = await Navigator.of(context).push<bool>(
+    final String? vehicleId = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (context) => const VehicleRegistrationPage()),
     );
 
-    if (!mounted || registered != true) {
+    if (!mounted || vehicleId == null || vehicleId.isEmpty) {
       return;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Vehicle registered successfully.')),
+      SnackBar(
+        content: Text('Vehicle registered successfully. ID: $vehicleId'),
+      ),
     );
   }
 

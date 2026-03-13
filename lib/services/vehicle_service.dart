@@ -17,7 +17,6 @@ class VehicleService {
     return _firestore
         .collection('vehicles')
         .where('ownerId', isEqualTo: user.uid)
-        .orderBy('createdAt', descending: true)
         .snapshots();
   }
 

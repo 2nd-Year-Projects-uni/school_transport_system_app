@@ -3,7 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math' as math;
 import 'services/auth_service.dart';
-import 'driver_interface.dart';
+import 'driver_home.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Color scheme (copied from login/signup pages)
@@ -577,7 +577,7 @@ class _DriverLoginPageState extends State<DriverLoginPage>
       // TODO: Navigate to driver dashboard/home
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const DriverInterfacePage()),
+        MaterialPageRoute(builder: (context) => const DriverHomePage()),
       );
       ScaffoldMessenger.of(
         context,

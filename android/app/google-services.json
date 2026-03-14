@@ -12,7 +12,12 @@
           "package_name": "com.example.school_van_app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "178202506405-u2f11mpar8e30858rovqf80l0ktt4p8e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBoSCmzBbN_6O5JdiHYBvKOLxKrwAEpJXA"
@@ -20,7 +25,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "178202506405-u2f11mpar8e30858rovqf80l0ktt4p8e.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

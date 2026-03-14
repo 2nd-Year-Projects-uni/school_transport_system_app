@@ -36,6 +36,12 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
   final TextEditingController _startingLocationController =
       TextEditingController();
 
+  // Route Points (optional, up to 2)
+  final List<TextEditingController> _routePointControllers = [];
+  final List<List<_PlaceSuggestion>> _routePointSuggestions = [[], []];
+  final List<bool> _routePointConfirmed = [false, false];
+  final Map<int, Timer> _routePointSearchTimers = {};
+
   final List<TextEditingController> _schoolControllers = [
     TextEditingController(),
   ];
@@ -57,6 +63,9 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
     _registerNumberController.dispose();
     _insuranceDateController.dispose();
     _startingLocationController.dispose();
+    for (final controller in _routePointControllers) {
+      controller.dispose();
+    }
     _startingLocationSearchTimer?.cancel();
     for (final controller in _schoolControllers) {
       controller.dispose();
@@ -65,6 +74,54 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
       timer.cancel();
     }
     super.dispose();
+  }
+
+  bool get _canAddAnotherRoutePoint =>
+      _routePointControllers.length < 2 &&
+      (_routePointControllers.isEmpty ||
+          _routePointControllers.last.text.trim().isNotEmpty);
+
+  void _addRoutePointField() {
+    setState(() {
+      _routePointControllers.add(TextEditingController());
+      _routePointSuggestions.add([]);
+      _routePointConfirmed.add(false);
+    });
+  }
+
+  void _removeRoutePointField(int index) {
+    _routePointSearchTimers[index]?.cancel();
+    _routePointSearchTimers.remove(index);
+    setState(() {
+      _routePointControllers[index].dispose();
+      _routePointControllers.removeAt(index);
+      _routePointSuggestions.removeAt(index);
+      _routePointConfirmed.removeAt(index);
+    });
+  }
+
+  void _onRoutePointChanged(int index, String value) {
+    if (index < _routePointConfirmed.length) {
+      _routePointConfirmed[index] = false;
+    }
+    _routePointSearchTimers[index]?.cancel();
+    _routePointSearchTimers[index] = Timer(
+      const Duration(milliseconds: 350),
+      () async {
+        final List<_PlaceSuggestion> suggestions = await _fetchPlaceSuggestions(
+          value,
+          schoolSearch: false,
+        );
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          if (index < _routePointSuggestions.length) {
+            _routePointSuggestions[index] = suggestions;
+          }
+        });
+      },
+    );
   }
 
   InputDecoration _inputDecoration(
@@ -333,6 +390,12 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
         .where((school) => school.isNotEmpty)
         .toList();
 
+    // Collect route points (optional)
+    final List<String> routePoints = _routePointControllers
+        .map((controller) => controller.text.trim())
+        .where((place) => place.isNotEmpty)
+        .toList();
+
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -377,6 +440,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
         insuranceExpiryDate: _insuranceExpiryDate!,
         startingLocation: _startingLocationController.text,
         schools: schools,
+        routePoints: routePoints,
         vehiclePhoto: _vehiclePhoto!,
       );
 
@@ -680,6 +744,92 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                     });
                   },
                 ),
+                const SizedBox(height: 16),
+                Text(
+                  'Route Points (optional)',
+                  style: TextStyle(
+                    color: _blue,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...List<Widget>.generate(_routePointControllers.length, (
+                  index,
+                ) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: _routePointControllers[index],
+                                onChanged: (value) =>
+                                    _onRoutePointChanged(index, value),
+                                autovalidateMode: AutovalidateMode.onUnfocus,
+                                decoration: _inputDecoration(
+                                  'Route point ${index + 1}',
+                                  Icons.alt_route_outlined,
+                                  hint: 'Search place, town, or landmark',
+                                ),
+                                validator: (value) {
+                                  if (value != null &&
+                                      value.trim().isNotEmpty &&
+                                      index < _routePointConfirmed.length &&
+                                      !_routePointConfirmed[index]) {
+                                    return 'Select a location from the suggestions.';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                            if (index > 0) ...[
+                              const SizedBox(width: 10),
+                              IconButton(
+                                onPressed: () => _removeRoutePointField(index),
+                                icon: Icon(
+                                  Icons.remove_circle_outline,
+                                  color: Colors.red.shade400,
+                                ),
+                                tooltip: 'Remove route point',
+                              ),
+                            ],
+                          ],
+                        ),
+                        _buildSuggestionBox(
+                          _routePointSuggestions[index],
+                          onSelected: (suggestion) {
+                            setState(() {
+                              _routePointConfirmed[index] = true;
+                              _routePointControllers[index].text =
+                                  suggestion.description;
+                              _routePointSuggestions[index] = [];
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                if (_canAddAnotherRoutePoint)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _addRoutePointField,
+                      icon: Icon(Icons.add_circle_outline, color: _teal),
+                      label: Text(
+                        'Add route point',
+                        style: TextStyle(
+                          color: _teal,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 10),
                 const SizedBox(height: 16),
                 Text(
                   'Schools',

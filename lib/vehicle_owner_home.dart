@@ -118,6 +118,8 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
         return Scaffold(
           backgroundColor: const Color(0xFFF6F9FC),
           appBar: AppBar(
+            automaticallyImplyLeading: false,
+            centerTitle: true,
             title: const Text('My Vehicles'),
             backgroundColor: navy,
             foregroundColor: Colors.white,
@@ -152,6 +154,7 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final vehicle = docs[index].data() as Map<String, dynamic>;
+                    vehicle['id'] = docs[index].id;
                     final String vehicleType =
                         vehicle['vehicleType'] as String? ?? 'Vehicle';
                     final String registerNumber =

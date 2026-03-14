@@ -59,6 +59,7 @@ class AuthService {
       'licenseBackUrl': backUrl,
       'approved': false, // admin approval required
       'createdAt': FieldValue.serverTimestamp(),
+      'vehicleId': null, // Field for vehicle assignment
     });
     return userCredential;
   }

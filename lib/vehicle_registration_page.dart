@@ -51,7 +51,10 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
   Timer? _startingLocationSearchTimer;
   List<_PlaceSuggestion> _startingLocationSuggestions = [];
   bool _startingLocationConfirmed = false;
+  Map<String, double>? _startingLocationCoordinates;
+  final List<Map<String, double>?> _routePointCoordinates = [];
   final List<bool> _schoolConfirmed = [false];
+  final List<Map<String, double>?> _schoolCoordinates = [null];
   String? _selectedVehicleType;
   String? _airCondition;
   DateTime? _insuranceExpiryDate;
@@ -86,6 +89,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
       _routePointControllers.add(TextEditingController());
       _routePointSuggestions.add([]);
       _routePointConfirmed.add(false);
+      _routePointCoordinates.add(null);
     });
   }
 
@@ -97,12 +101,16 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
       _routePointControllers.removeAt(index);
       _routePointSuggestions.removeAt(index);
       _routePointConfirmed.removeAt(index);
+      _routePointCoordinates.removeAt(index);
     });
   }
 
   void _onRoutePointChanged(int index, String value) {
     if (index < _routePointConfirmed.length) {
       _routePointConfirmed[index] = false;
+    }
+    if (index < _routePointCoordinates.length) {
+      _routePointCoordinates[index] = null;
     }
     _routePointSearchTimers[index]?.cancel();
     _routePointSearchTimers[index] = Timer(
@@ -317,8 +325,92 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
     return mappedLegacy.take(5).toList();
   }
 
+  Future<Map<String, double>?> _fetchPlaceCoordinates(String placeId) async {
+    final String trimmedPlaceId = placeId.trim();
+    if (_googlePlacesApiKey.isEmpty || trimmedPlaceId.isEmpty) {
+      return null;
+    }
+
+    try {
+      final Uri newApiUri = Uri.https(
+        'places.googleapis.com',
+        '/v1/places/$trimmedPlaceId',
+      );
+      final http.Response newApiResponse = await http.get(
+        newApiUri,
+        headers: <String, String>{
+          'X-Goog-Api-Key': _googlePlacesApiKey,
+          'X-Goog-FieldMask': 'location',
+        },
+      );
+      if (newApiResponse.statusCode == 200) {
+        final Map<String, dynamic> decoded =
+            jsonDecode(newApiResponse.body) as Map<String, dynamic>;
+        final Map<String, dynamic> location =
+            decoded['location'] as Map<String, dynamic>? ?? <String, dynamic>{};
+        final double? latitude = (location['latitude'] as num?)?.toDouble();
+        final double? longitude = (location['longitude'] as num?)?.toDouble();
+        if (latitude != null && longitude != null) {
+          return <String, double>{'latitude': latitude, 'longitude': longitude};
+        }
+      }
+    } catch (_) {
+      // Fall back to legacy endpoint below.
+    }
+
+    try {
+      final Uri legacyUri = Uri.https(
+        'maps.googleapis.com',
+        '/maps/api/place/details/json',
+        <String, String>{
+          'place_id': trimmedPlaceId,
+          'fields': 'geometry/location',
+          'key': _googlePlacesApiKey,
+        },
+      );
+      final http.Response legacyResponse = await http.get(legacyUri);
+      if (legacyResponse.statusCode != 200) {
+        return null;
+      }
+      final Map<String, dynamic> decodedLegacy =
+          jsonDecode(legacyResponse.body) as Map<String, dynamic>;
+      final String status =
+          decodedLegacy['status'] as String? ?? 'UNKNOWN_ERROR';
+      if (status != 'OK') {
+        return null;
+      }
+      final Map<String, dynamic> result =
+          decodedLegacy['result'] as Map<String, dynamic>? ??
+          <String, dynamic>{};
+      final Map<String, dynamic> geometry =
+          result['geometry'] as Map<String, dynamic>? ?? <String, dynamic>{};
+      final Map<String, dynamic> location =
+          geometry['location'] as Map<String, dynamic>? ?? <String, dynamic>{};
+      final double? latitude = (location['lat'] as num?)?.toDouble();
+      final double? longitude = (location['lng'] as num?)?.toDouble();
+      if (latitude == null || longitude == null) {
+        return null;
+      }
+      return <String, double>{'latitude': latitude, 'longitude': longitude};
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, dynamic> _toPlaceData(
+    String name,
+    Map<String, double>? coordinates,
+  ) {
+    return <String, dynamic>{
+      'name': name.trim(),
+      'latitude': coordinates?['latitude'],
+      'longitude': coordinates?['longitude'],
+    };
+  }
+
   void _onStartingLocationChanged(String value) {
     _startingLocationConfirmed = false;
+    _startingLocationCoordinates = null;
     _startingLocationSearchTimer?.cancel();
     _startingLocationSearchTimer = Timer(
       const Duration(milliseconds: 350),
@@ -340,6 +432,9 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
   void _onSchoolChanged(int index, String value) {
     if (index < _schoolConfirmed.length) {
       _schoolConfirmed[index] = false;
+    }
+    if (index < _schoolCoordinates.length) {
+      _schoolCoordinates[index] = null;
     }
     _schoolSearchTimers[index]?.cancel();
     _schoolSearchTimers[index] = Timer(
@@ -366,6 +461,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
       _schoolControllers.add(TextEditingController());
       _schoolSuggestions.add([]);
       _schoolConfirmed.add(false);
+      _schoolCoordinates.add(null);
     });
   }
 
@@ -381,20 +477,34 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
       _schoolControllers.removeAt(index);
       _schoolSuggestions.removeAt(index);
       _schoolConfirmed.removeAt(index);
+      _schoolCoordinates.removeAt(index);
     });
   }
 
   Future<void> _submitVehicle() async {
-    final List<String> schools = _schoolControllers
-        .map((controller) => controller.text.trim())
-        .where((school) => school.isNotEmpty)
-        .toList();
+    final List<Map<String, dynamic>> schools = <Map<String, dynamic>>[];
+    for (int i = 0; i < _schoolControllers.length; i++) {
+      final String schoolName = _schoolControllers[i].text.trim();
+      if (schoolName.isEmpty) {
+        continue;
+      }
+      final Map<String, double>? coordinates = i < _schoolCoordinates.length
+          ? _schoolCoordinates[i]
+          : null;
+      schools.add(_toPlaceData(schoolName, coordinates));
+    }
 
-    // Collect route points (optional)
-    final List<String> routePoints = _routePointControllers
-        .map((controller) => controller.text.trim())
-        .where((place) => place.isNotEmpty)
-        .toList();
+    final List<Map<String, dynamic>> routePoints = <Map<String, dynamic>>[];
+    for (int i = 0; i < _routePointControllers.length; i++) {
+      final String placeName = _routePointControllers[i].text.trim();
+      if (placeName.isEmpty) {
+        continue;
+      }
+      final Map<String, double>? coordinates = i < _routePointCoordinates.length
+          ? _routePointCoordinates[i]
+          : null;
+      routePoints.add(_toPlaceData(placeName, coordinates));
+    }
 
     if (!_formKey.currentState!.validate()) {
       return;
@@ -438,7 +548,10 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
         vehicleType: _selectedVehicleType!,
         condition: _airCondition!,
         insuranceExpiryDate: _insuranceExpiryDate!,
-        startingLocation: _startingLocationController.text,
+        startingLocation: _toPlaceData(
+          _startingLocationController.text,
+          _startingLocationCoordinates,
+        ),
         schools: schools,
         routePoints: routePoints,
         vehiclePhoto: _vehiclePhoto!,
@@ -537,10 +650,18 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
         ),
         _buildSuggestionBox(
           _schoolSuggestions[index],
-          onSelected: (suggestion) {
+          onSelected: (suggestion) async {
+            final Map<String, double>? coordinates =
+                await _fetchPlaceCoordinates(suggestion.placeId);
+            if (!mounted) {
+              return;
+            }
             setState(() {
               _schoolConfirmed[index] = true;
               _schoolControllers[index].text = suggestion.description;
+              if (index < _schoolCoordinates.length) {
+                _schoolCoordinates[index] = coordinates;
+              }
               _schoolSuggestions[index] = [];
             });
           },
@@ -736,10 +857,16 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                 ),
                 _buildSuggestionBox(
                   _startingLocationSuggestions,
-                  onSelected: (suggestion) {
+                  onSelected: (suggestion) async {
+                    final Map<String, double>? coordinates =
+                        await _fetchPlaceCoordinates(suggestion.placeId);
+                    if (!mounted) {
+                      return;
+                    }
                     setState(() {
                       _startingLocationConfirmed = true;
                       _startingLocationController.text = suggestion.description;
+                      _startingLocationCoordinates = coordinates;
                       _startingLocationSuggestions = [];
                     });
                   },
@@ -801,11 +928,21 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                         ),
                         _buildSuggestionBox(
                           _routePointSuggestions[index],
-                          onSelected: (suggestion) {
+                          onSelected: (suggestion) async {
+                            final Map<String, double>? coordinates =
+                                await _fetchPlaceCoordinates(
+                                  suggestion.placeId,
+                                );
+                            if (!mounted) {
+                              return;
+                            }
                             setState(() {
                               _routePointConfirmed[index] = true;
                               _routePointControllers[index].text =
                                   suggestion.description;
+                              if (index < _routePointCoordinates.length) {
+                                _routePointCoordinates[index] = coordinates;
+                              }
                               _routePointSuggestions[index] = [];
                             });
                           },

@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dashboard_page.dart';
 import 'add_child_page.dart';
 import 'login.dart';
+import 'filtered_vans.dart';
 
 class SelectChildPage extends StatefulWidget {
   const SelectChildPage({super.key});
@@ -16,21 +17,81 @@ class SelectChildPage extends StatefulWidget {
 class _SelectChildPageState extends State<SelectChildPage> {
   final String parentId = FirebaseAuth.instance.currentUser!.uid;
 
-  void openDashboard(String studentId, String studentName) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DashboardPage(
-          childId: studentId,
-          childName: studentName,
-        ),
-      ),
-    );
+  Future<void> handleChildTap(String studentId, String studentName) async {
+    try {
+      final childDoc = await FirebaseFirestore.instance
+          .collection('Children')
+          .doc(studentId)
+          .get();
+
+      final data = childDoc.data();
+      final hasVan = data != null &&
+          data.containsKey('vanId') &&
+          data['vanId'] != null &&
+          data['vanId'].toString().isNotEmpty;
+
+      if (!mounted) return;
+
+      if (hasVan) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DashboardPage(
+              childId: studentId,
+              childName: studentName,
+            ),
+          ),
+        );
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => FilteredVansPage(
+              childId: studentId,
+              childName: studentName,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text("Something went wrong. Please try again.")),
+      );
+    }
+  }
+
+  // Links a child to a van:
+  // 1. Writes vanId + vanCode to the child's doc
+  // 2. Adds childId to the van's linkedChildren array
+  Future<void> linkChildToVan({
+    required String childId,
+    required String vanId,
+    required String vanCode,
+  }) async {
+    final batch = FirebaseFirestore.instance.batch();
+
+    // Update child doc
+    final childRef =
+        FirebaseFirestore.instance.collection('Children').doc(childId);
+    batch.update(childRef, {
+      'vanId': vanId,
+      'code': vanCode,
+    });
+
+    // Update van doc — add childId to linkedChildren array
+    final vanRef =
+        FirebaseFirestore.instance.collection('vehicles').doc(vanId);
+    batch.update(vanRef, {
+      'linkedChildren': FieldValue.arrayUnion([childId]),
+    });
+
+    await batch.commit();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Colors from LoginPage
     final Color navy = const Color(0xFF001F3F);
     final Color blue = const Color(0xFF005792);
     final Color teal = const Color(0xFF00B894);
@@ -68,10 +129,8 @@ class _SelectChildPageState extends State<SelectChildPage> {
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF00B894), // teal
-                      ),
+                    return Center(
+                      child: CircularProgressIndicator(color: teal),
                     );
                   }
 
@@ -89,7 +148,7 @@ class _SelectChildPageState extends State<SelectChildPage> {
                           Text(
                             "No children added yet",
                             style: TextStyle(
-                              fontSize: 18, 
+                              fontSize: 18,
                               color: blue.withOpacity(0.7),
                               fontWeight: FontWeight.w500,
                             ),
@@ -114,6 +173,12 @@ class _SelectChildPageState extends State<SelectChildPage> {
                     itemCount: students.length,
                     itemBuilder: (context, index) {
                       final student = students[index];
+                      final data =
+                          student.data() as Map<String, dynamic>;
+                      final hasVan = data.containsKey('vanId') &&
+                          data['vanId'] != null &&
+                          data['vanId'].toString().isNotEmpty;
+
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: SizedBox(
@@ -127,17 +192,48 @@ class _SelectChildPageState extends State<SelectChildPage> {
                               elevation: 6,
                               shadowColor: navy.withOpacity(0.18),
                             ),
-                            onPressed: () => openDashboard(
-                              student.id,
-                              student['name'],
-                            ),
-                            child: Text(
-                              student['name'],
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
+                            onPressed: () =>
+                                handleChildTap(student.id, student['name']),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  student['name'],
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  hasVan
+                                      ? Icons.directions_bus
+                                      : Icons.search,
+                                  color: Colors.white70,
+                                  size: 16,
+                                ),
+                                if (hasVan && data['code'] != null) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: teal.withOpacity(0.25),
+                                      borderRadius:
+                                          BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      data['code'].toString(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
                         ),
@@ -149,7 +245,7 @@ class _SelectChildPageState extends State<SelectChildPage> {
             ),
 
             const SizedBox(height: 16),
-            // ADD STUDENT BUTTON - More visible
+            // ADD STUDENT BUTTON
             SizedBox(
               width: double.infinity,
               height: 56,

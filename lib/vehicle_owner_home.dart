@@ -8,6 +8,20 @@ final Color navy = const Color(0xFF001F3F);
 final Color blue = const Color(0xFF005792);
 final Color teal = const Color(0xFF00B894);
 
+String _placeNameOrFallback(dynamic value, {String fallback = 'Unknown'}) {
+  if (value is String) {
+    final String trimmed = value.trim();
+    return trimmed.isNotEmpty ? trimmed : fallback;
+  }
+  if (value is Map) {
+    final dynamic candidate = value['name'];
+    if (candidate is String && candidate.trim().isNotEmpty) {
+      return candidate.trim();
+    }
+  }
+  return fallback;
+}
+
 class VehicleOwnerHomePage extends StatefulWidget {
   const VehicleOwnerHomePage({super.key});
 
@@ -190,8 +204,9 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
                         vehicle['vehicleType'] as String? ?? 'Vehicle';
                     final String registerNumber =
                         vehicle['registerNumber'] as String? ?? '';
-                    final String startingLocation =
-                        vehicle['startingLocation'] as String? ?? 'Unknown';
+                    final String startingLocation = _placeNameOrFallback(
+                      vehicle['startingLocation'],
+                    );
                     final String condition =
                         vehicle['condition'] as String? ?? 'Unknown';
                     final String normalizedCondition = condition

@@ -16,6 +16,24 @@ class _DriverHomePageState extends State<DriverHomePage> {
   bool _isJoinVehicleExpanded = false;
   bool _isLeaving = false;
 
+  String _placeName(dynamic place) {
+    if (place is String) {
+      return place.trim();
+    }
+    if (place is Map) {
+      final dynamic name = place['name'];
+      if (name is String) {
+        return name.trim();
+      }
+    }
+    return '';
+  }
+
+  List<String> _placeNameList(dynamic places) {
+    final List<dynamic> list = places as List<dynamic>? ?? const <dynamic>[];
+    return list.map(_placeName).where((name) => name.isNotEmpty).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -485,34 +503,23 @@ class _DriverHomePageState extends State<DriverHomePage> {
                               padding: const EdgeInsets.only(top: 12),
                               child: Builder(
                                 builder: (context) {
+                                  final String
+                                  parsedStartingLocation = _placeName(
+                                    _currentVehicleData!['startingLocation'],
+                                  );
                                   final String startingLocation =
-                                      (_currentVehicleData!['startingLocation']
-                                                  as String?)
-                                              ?.trim()
-                                              .isNotEmpty ==
-                                          true
-                                      ? (_currentVehicleData!['startingLocation']
-                                                as String)
-                                            .trim()
+                                      parsedStartingLocation.isNotEmpty
+                                      ? parsedStartingLocation
                                       : 'Not available';
 
-                                  final List<String> schools =
-                                      (_currentVehicleData!['schools']
-                                                  as List<dynamic>? ??
-                                              const <dynamic>[])
-                                          .whereType<String>()
-                                          .map((e) => e.trim())
-                                          .where((e) => e.isNotEmpty)
-                                          .toList();
+                                  final List<String> schools = _placeNameList(
+                                    _currentVehicleData!['schools'],
+                                  );
 
                                   final List<String> routePoints =
-                                      (_currentVehicleData!['routePoints']
-                                                  as List<dynamic>? ??
-                                              const <dynamic>[])
-                                          .whereType<String>()
-                                          .map((e) => e.trim())
-                                          .where((e) => e.isNotEmpty)
-                                          .toList();
+                                      _placeNameList(
+                                        _currentVehicleData!['routePoints'],
+                                      );
 
                                   return Column(
                                     children: [

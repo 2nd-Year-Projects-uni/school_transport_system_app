@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 
 import 'services/vehicle_service.dart';
 import 'vehicle_owner_vehicle_details.dart';
@@ -8,6 +7,20 @@ import 'vehicle_registration_page.dart';
 final Color navy = const Color(0xFF001F3F);
 final Color blue = const Color(0xFF005792);
 final Color teal = const Color(0xFF00B894);
+
+String _placeNameOrFallback(dynamic value, {String fallback = 'Unknown'}) {
+  if (value is String) {
+    final String trimmed = value.trim();
+    return trimmed.isNotEmpty ? trimmed : fallback;
+  }
+  if (value is Map) {
+    final dynamic candidate = value['name'];
+    if (candidate is String && candidate.trim().isNotEmpty) {
+      return candidate.trim();
+    }
+  }
+  return fallback;
+}
 
 class VehicleOwnerHomePage extends StatefulWidget {
   const VehicleOwnerHomePage({super.key});
@@ -68,38 +81,70 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
     return Icons.directions_bus_filled;
   }
 
-  Widget _approvalStamp({required bool isApproved}) {
-    final Color stampColor = isApproved
+  Widget _modernVehicleIcon(String vehicleType) {
+    final Color ringColor = blue.withOpacity(0.24);
+
+    return Container(
+      width: 58,
+      height: 58,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        border: Border.all(color: ringColor, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: blue.withOpacity(0.20),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Icon(_vehicleIconForType(vehicleType), color: navy, size: 30),
+      ),
+    );
+  }
+
+  Widget _approvalBadge({required bool isApproved}) {
+    final Color accentColor = isApproved
         ? Colors.green.shade700
         : Colors.red.shade700;
-    final String stampText = isApproved ? 'APPROVED' : 'PENDING';
+    final Color badgeBackground = isApproved
+        ? Colors.green.shade50
+        : Colors.red.shade50;
+    final IconData badgeIcon = isApproved
+        ? Icons.verified_rounded
+        : Icons.hourglass_top_rounded;
+    final String badgeText = isApproved ? 'Approved' : 'Pending';
 
-    return Transform.rotate(
-      angle: -42 * math.pi / 180,
-      child: Container(
-        width: 110,
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: stampColor,
-          borderRadius: BorderRadius.circular(4),
-          boxShadow: [
-            BoxShadow(
-              color: stampColor.withOpacity(0.22),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Text(
-          stampText,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 9,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.1,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: badgeBackground,
+        borderRadius: BorderRadius.circular(50),
+        border: Border.all(color: accentColor.withOpacity(0.24)),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withOpacity(0.16),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
-        ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(badgeIcon, size: 14, color: accentColor),
+          const SizedBox(width: 6),
+          Text(
+            badgeText,
+            style: TextStyle(
+              color: accentColor,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -159,22 +204,27 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
                         vehicle['vehicleType'] as String? ?? 'Vehicle';
                     final String registerNumber =
                         vehicle['registerNumber'] as String? ?? '';
-                    final String startingLocation =
-                        vehicle['startingLocation'] as String? ?? 'Unknown';
+                    final String startingLocation = _placeNameOrFallback(
+                      vehicle['startingLocation'],
+                    );
                     final String condition =
                         vehicle['condition'] as String? ?? 'Unknown';
+                    final String normalizedCondition = condition
+                        .toLowerCase()
+                        .replaceAll(RegExp(r'[^a-z]'), '');
+                    final bool showAcCondition = normalizedCondition == 'ac';
                     final bool isApproved = vehicle['status'] as bool? ?? false;
-                    final Color statusBorderColor = isApproved
-                        ? Colors.green.shade600
-                        : Colors.red.shade400;
+                    final Color statusShadowColor = isApproved
+                        ? Colors.green.shade600.withOpacity(0.34)
+                        : Colors.red.shade300.withOpacity(0.24);
 
                     return Card(
                       color: Colors.white,
-                      elevation: 2.5,
+                      elevation: 6,
+                      shadowColor: statusShadowColor,
                       clipBehavior: Clip.antiAlias,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(color: statusBorderColor, width: 1.4),
                       ),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(14),
@@ -188,117 +238,94 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
                             ),
                           );
                         },
-                        child: Stack(
-                          clipBehavior: Clip.hardEdge,
-                          children: [
-                            Positioned(
-                              left: 0,
-                              top: 16,
-                              child: _approvalStamp(isApproved: isApproved),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                36,
-                                14,
-                                16,
-                                14,
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 120,
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          vehicleType,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 120,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      vehicleType,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: navy,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    _modernVehicleIcon(vehicleType),
+                                    if (showAcCondition) ...[
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: teal.withOpacity(0.14),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'AC',
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
-                                            color: navy,
-                                            fontSize: 15,
+                                            color: teal,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w700,
                                           ),
                                         ),
-                                        const SizedBox(height: 10),
-                                        CircleAvatar(
-                                          radius: 24,
-                                          backgroundColor: blue.withOpacity(
-                                            0.12,
-                                          ),
-                                          child: Icon(
-                                            _vehicleIconForType(vehicleType),
-                                            color: blue,
-                                            size: 28,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 5,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: teal.withOpacity(0.14),
-                                            borderRadius: BorderRadius.circular(
-                                              20,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            condition,
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              color: teal,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(right: 10),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            registerNumber,
-                                            textAlign: TextAlign.right,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: navy,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            startingLocation,
-                                            textAlign: TextAlign.right,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              color: Colors.blueGrey.shade700,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ],
                                       ),
-                                    ),
-                                  ),
-                                ],
+                                    ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 10),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _approvalBadge(isApproved: isApproved),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        registerNumber,
+                                        textAlign: TextAlign.right,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: navy,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        startingLocation,
+                                        textAlign: TextAlign.right,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: Colors.blueGrey.shade700,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );

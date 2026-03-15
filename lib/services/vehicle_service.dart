@@ -26,10 +26,10 @@ class VehicleService {
     required String vehicleType,
     required String condition,
     required DateTime insuranceExpiryDate,
-    required String startingLocation,
-    required List<String> schools,
+    required Map<String, dynamic> startingLocation,
+    required List<Map<String, dynamic>> schools,
     required XFile vehiclePhoto,
-    List<String>? routePoints,
+    List<Map<String, dynamic>>? routePoints,
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -51,7 +51,7 @@ class VehicleService {
       'vehicleType': vehicleType.trim(),
       'condition': condition,
       'insuranceExpiryDate': Timestamp.fromDate(insuranceExpiryDate),
-      'startingLocation': startingLocation.trim(),
+      'startingLocation': startingLocation,
       'schools': schools,
       'routePoints': routePoints ?? [],
       'vehiclePhotoUrl': photoUrl,

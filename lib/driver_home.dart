@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'services/location_service.dart';
 
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({Key? key}) : super(key: key);
@@ -10,6 +11,8 @@ class DriverHomePage extends StatefulWidget {
 }
 
 class _DriverHomePageState extends State<DriverHomePage> {
+  final LocationService _locationService = LocationService();
+
   String? _currentVehicleId;
   Map<String, dynamic>? _currentVehicleData;
   bool _isAssignedVehicleExpanded = false;
@@ -38,6 +41,19 @@ class _DriverHomePageState extends State<DriverHomePage> {
   void initState() {
     super.initState();
     _loadCurrentVehicle();
+    _startLocationTracking();
+  }
+
+  Future<void> _startLocationTracking() async {
+    try {
+      await _locationService.startTracking();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Location error: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _loadCurrentVehicle() async {
@@ -133,6 +149,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   @override
   void dispose() {
+    _locationService.stopTracking();
     _vehicleCodeController.dispose();
     super.dispose();
   }
@@ -1245,6 +1262,20 @@ class _DriverHomePageState extends State<DriverHomePage> {
             ),
             const SizedBox(height: 24),
           ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          if (_locationService.isTracking) {
+            await _locationService.stopTracking();
+          } else {
+            await _startLocationTracking();
+          }
+          if (mounted) setState(() {});
+        },
+        backgroundColor: _locationService.isTracking ? Colors.red : Colors.green,
+        child: Icon(
+          _locationService.isTracking ? Icons.location_off : Icons.location_on,
         ),
       ),
     );

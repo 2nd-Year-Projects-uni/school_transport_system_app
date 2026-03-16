@@ -3,8 +3,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+
+enum _PickupSelectionMode { interactiveMap, quickCurrentLocation }
 
 class AddChildPage extends StatefulWidget {
   const AddChildPage({super.key});
@@ -16,18 +19,24 @@ class AddChildPage extends StatefulWidget {
 class _AddChildPageState extends State<AddChildPage> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController schoolController = TextEditingController();
+  final TextEditingController pickupSearchController = TextEditingController();
 
   bool loading = false;
   bool mapReady = false;
+  bool _fetchingCurrentLocation = false;
+  bool _resolvingPickupPlace = false;
   LatLng? selectedLocation;
   GoogleMapController? mapController;
+  _PickupSelectionMode _pickupMode = _PickupSelectionMode.quickCurrentLocation;
 
   final String parentId = FirebaseAuth.instance.currentUser!.uid;
 
-  static const String _googlePlacesApiKey = '***REMOVED***';
+  static const String _googlePlacesApiKey =
+      '***REMOVED***';
   List<_PlaceSuggestion> _schoolSuggestions = [];
-  bool _schoolConfirmed = false;
+  List<_PlaceSuggestion> _pickupSuggestions = [];
   Timer? _schoolSearchTimer;
+  Timer? _pickupSearchTimer;
 
   static const CameraPosition _initialPosition = CameraPosition(
     target: LatLng(6.9271, 79.8612),
@@ -38,8 +47,10 @@ class _AddChildPageState extends State<AddChildPage> {
   void dispose() {
     nameController.dispose();
     schoolController.dispose();
+    pickupSearchController.dispose();
     mapController?.dispose();
     _schoolSearchTimer?.cancel();
+    _pickupSearchTimer?.cancel();
     super.dispose();
   }
 
@@ -72,41 +83,41 @@ class _AddChildPageState extends State<AddChildPage> {
       );
 
       if (newApiResponse.statusCode == 200) {
-        final decoded =
-            jsonDecode(newApiResponse.body) as Map<String, dynamic>;
+        final decoded = jsonDecode(newApiResponse.body) as Map<String, dynamic>;
         final suggestions = decoded['suggestions'] as List<dynamic>? ?? [];
-        final mapped = suggestions.map((item) {
-          final placePrediction =
-              (item as Map<String, dynamic>)['placePrediction']
-                  as Map<String, dynamic>? ??
-              {};
-          final text =
-              placePrediction['text'] as Map<String, dynamic>? ?? {};
-          final placePath = placePrediction['place'] as String? ?? '';
-          return _PlaceSuggestion(
-            description: text['text'] as String? ?? '',
-            placeId: placePath.startsWith('places/')
-                ? placePath.substring('places/'.length)
-                : placePath,
-          );
-        }).where((s) => s.description.isNotEmpty).take(5).toList();
+        final mapped = suggestions
+            .map((item) {
+              final placePrediction =
+                  (item as Map<String, dynamic>)['placePrediction']
+                      as Map<String, dynamic>? ??
+                  {};
+              final text =
+                  placePrediction['text'] as Map<String, dynamic>? ?? {};
+              final placePath = placePrediction['place'] as String? ?? '';
+              return _PlaceSuggestion(
+                description: text['text'] as String? ?? '',
+                placeId: placePath.startsWith('places/')
+                    ? placePath.substring('places/'.length)
+                    : placePath,
+              );
+            })
+            .where((s) => s.description.isNotEmpty)
+            .take(5)
+            .toList();
 
         if (mapped.isNotEmpty) return mapped;
       }
     } catch (_) {}
 
     // Fallback to legacy endpoint
-    final Uri legacyUri = Uri.https(
-      'maps.googleapis.com',
-      '/maps/api/place/autocomplete/json',
-      {
-        'input': trimmedQuery,
-        'key': _googlePlacesApiKey,
-        'types': 'establishment',
-        'components': 'country:lk',
-        'region': 'lk',
-      },
-    );
+    final Uri legacyUri =
+        Uri.https('maps.googleapis.com', '/maps/api/place/autocomplete/json', {
+          'input': trimmedQuery,
+          'key': _googlePlacesApiKey,
+          'types': 'establishment',
+          'components': 'country:lk',
+          'region': 'lk',
+        });
 
     final legacyResponse = await http.get(legacyUri);
     if (legacyResponse.statusCode != 200) return [];
@@ -116,40 +127,318 @@ class _AddChildPageState extends State<AddChildPage> {
     final status = decodedLegacy['status'] as String? ?? 'UNKNOWN_ERROR';
     if (status != 'OK' && status != 'ZERO_RESULTS') return [];
 
-    final predictions =
-        decodedLegacy['predictions'] as List<dynamic>? ?? [];
-    return predictions.map((item) {
-      final p = item as Map<String, dynamic>;
-      return _PlaceSuggestion(
-        description: p['description'] as String? ?? '',
-        placeId: p['place_id'] as String? ?? '',
+    final predictions = decodedLegacy['predictions'] as List<dynamic>? ?? [];
+    return predictions
+        .map((item) {
+          final p = item as Map<String, dynamic>;
+          return _PlaceSuggestion(
+            description: p['description'] as String? ?? '',
+            placeId: p['place_id'] as String? ?? '',
+          );
+        })
+        .take(5)
+        .toList();
+  }
+
+  Future<List<_PlaceSuggestion>> _fetchPickupSuggestions(String query) async {
+    final String trimmedQuery = query.trim();
+    if (_googlePlacesApiKey.isEmpty || trimmedQuery.length < 2) return [];
+
+    try {
+      final Uri newApiUri = Uri.https(
+        'places.googleapis.com',
+        '/v1/places:autocomplete',
       );
-    }).take(5).toList();
+      final Map<String, dynamic> payload = {
+        'input': trimmedQuery,
+        'languageCode': 'en',
+        'regionCode': 'lk',
+        'includedRegionCodes': ['lk'],
+      };
+
+      final http.Response newApiResponse = await http.post(
+        newApiUri,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': _googlePlacesApiKey,
+          'X-Goog-FieldMask':
+              'suggestions.placePrediction.place,suggestions.placePrediction.text.text',
+        },
+        body: jsonEncode(payload),
+      );
+
+      if (newApiResponse.statusCode == 200) {
+        final decoded = jsonDecode(newApiResponse.body) as Map<String, dynamic>;
+        final suggestions = decoded['suggestions'] as List<dynamic>? ?? [];
+        final mapped = suggestions
+            .map((item) {
+              final placePrediction =
+                  (item as Map<String, dynamic>)['placePrediction']
+                      as Map<String, dynamic>? ??
+                  {};
+              final text =
+                  placePrediction['text'] as Map<String, dynamic>? ?? {};
+              final placePath = placePrediction['place'] as String? ?? '';
+              return _PlaceSuggestion(
+                description: text['text'] as String? ?? '',
+                placeId: placePath.startsWith('places/')
+                    ? placePath.substring('places/'.length)
+                    : placePath,
+              );
+            })
+            .where((s) => s.description.isNotEmpty)
+            .take(5)
+            .toList();
+
+        if (mapped.isNotEmpty) return mapped;
+      }
+    } catch (_) {}
+
+    final Uri legacyUri =
+        Uri.https('maps.googleapis.com', '/maps/api/place/autocomplete/json', {
+          'input': trimmedQuery,
+          'key': _googlePlacesApiKey,
+          'components': 'country:lk',
+          'region': 'lk',
+        });
+
+    final legacyResponse = await http.get(legacyUri);
+    if (legacyResponse.statusCode != 200) return [];
+
+    final decodedLegacy =
+        jsonDecode(legacyResponse.body) as Map<String, dynamic>;
+    final status = decodedLegacy['status'] as String? ?? 'UNKNOWN_ERROR';
+    if (status != 'OK' && status != 'ZERO_RESULTS') return [];
+
+    final predictions = decodedLegacy['predictions'] as List<dynamic>? ?? [];
+    return predictions
+        .map((item) {
+          final p = item as Map<String, dynamic>;
+          return _PlaceSuggestion(
+            description: p['description'] as String? ?? '',
+            placeId: p['place_id'] as String? ?? '',
+          );
+        })
+        .take(5)
+        .toList();
+  }
+
+  Future<LatLng?> _fetchPlaceCoordinates(String placeId) async {
+    if (_googlePlacesApiKey.isEmpty || placeId.isEmpty) return null;
+
+    try {
+      final Uri newApiUri = Uri.https(
+        'places.googleapis.com',
+        '/v1/places/$placeId',
+      );
+      final http.Response newApiResponse = await http.get(
+        newApiUri,
+        headers: {
+          'X-Goog-Api-Key': _googlePlacesApiKey,
+          'X-Goog-FieldMask': 'location',
+        },
+      );
+
+      if (newApiResponse.statusCode == 200) {
+        final decoded = jsonDecode(newApiResponse.body) as Map<String, dynamic>;
+        final location = decoded['location'] as Map<String, dynamic>?;
+        final latitude = location?['latitude'];
+        final longitude = location?['longitude'];
+        if (latitude is num && longitude is num) {
+          return LatLng(latitude.toDouble(), longitude.toDouble());
+        }
+      }
+    } catch (_) {}
+
+    final Uri legacyUri = Uri.https(
+      'maps.googleapis.com',
+      '/maps/api/place/details/json',
+      {
+        'place_id': placeId,
+        'fields': 'geometry/location',
+        'key': _googlePlacesApiKey,
+      },
+    );
+
+    final legacyResponse = await http.get(legacyUri);
+    if (legacyResponse.statusCode != 200) return null;
+
+    final decodedLegacy =
+        jsonDecode(legacyResponse.body) as Map<String, dynamic>;
+    final status = decodedLegacy['status'] as String? ?? 'UNKNOWN_ERROR';
+    if (status != 'OK') return null;
+
+    final location =
+        ((decodedLegacy['result'] as Map<String, dynamic>?)?['geometry']
+                as Map<String, dynamic>?)?['location']
+            as Map<String, dynamic>?;
+    final lat = location?['lat'];
+    final lng = location?['lng'];
+    if (lat is num && lng is num) {
+      return LatLng(lat.toDouble(), lng.toDouble());
+    }
+    return null;
   }
 
   void _onSchoolChanged(String value) {
-    _schoolConfirmed = false;
     _schoolSearchTimer?.cancel();
-    _schoolSearchTimer =
-        Timer(const Duration(milliseconds: 350), () async {
+    _schoolSearchTimer = Timer(const Duration(milliseconds: 350), () async {
       final suggestions = await _fetchSchoolSuggestions(value);
       if (!mounted) return;
       setState(() => _schoolSuggestions = suggestions);
     });
   }
 
+  void _onPickupSearchChanged(String value) {
+    if (mounted) {
+      setState(() {
+        if (value.trim().isEmpty) {
+          _pickupSuggestions = [];
+        }
+      });
+    }
+
+    _pickupSearchTimer?.cancel();
+    if (value.trim().isEmpty) return;
+
+    _pickupSearchTimer = Timer(const Duration(milliseconds: 350), () async {
+      final suggestions = await _fetchPickupSuggestions(value);
+      if (!mounted) return;
+      setState(() => _pickupSuggestions = suggestions);
+    });
+  }
+
+  Future<void> _selectPickupSuggestion(_PlaceSuggestion suggestion) async {
+    if (_resolvingPickupPlace) return;
+
+    setState(() => _resolvingPickupPlace = true);
+    try {
+      final LatLng? coordinates = await _fetchPlaceCoordinates(
+        suggestion.placeId,
+      );
+      if (!mounted) return;
+
+      if (coordinates == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Failed to resolve selected place")),
+        );
+        return;
+      }
+
+      setState(() {
+        selectedLocation = coordinates;
+        pickupSearchController.text = suggestion.description;
+        _pickupSuggestions = [];
+      });
+
+      if (mapController != null) {
+        unawaited(
+          mapController!.animateCamera(
+            CameraUpdate.newLatLngZoom(coordinates, 16),
+          ),
+        );
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Pickup location selected from search")),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Unable to select pickup place")),
+      );
+    } finally {
+      if (mounted) setState(() => _resolvingPickupPlace = false);
+    }
+  }
+
+  Future<void> _openFullScreenMapPicker() async {
+    final LatLng? pickedLocation = await Navigator.push<LatLng>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _FullScreenMapPicker(
+          initialLocation: selectedLocation,
+          fallbackCameraPosition: _initialPosition,
+        ),
+      ),
+    );
+
+    if (!mounted || pickedLocation == null) return;
+    setState(() => selectedLocation = pickedLocation);
+
+    if (mapController != null) {
+      unawaited(
+        mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(pickedLocation, 16),
+        ),
+      );
+    }
+  }
+
+  Future<void> _setCurrentLocation() async {
+    if (_fetchingCurrentLocation) return;
+
+    setState(() => _fetchingCurrentLocation = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please enable location services")),
+        );
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Location permission is required")),
+        );
+        return;
+      }
+
+      final Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        selectedLocation = LatLng(position.latitude, position.longitude);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Current location selected")),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Failed to get current location")),
+      );
+    } finally {
+      if (mounted) setState(() => _fetchingCurrentLocation = false);
+    }
+  }
+
   Future<void> saveStudent() async {
     if (nameController.text.isEmpty || schoolController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill all fields")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please fill all fields")));
       return;
     }
 
     if (selectedLocation == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text("Please select a pickup location on the map")),
+          content: Text(
+            "Please set a pickup location by search, map selection, or current location",
+          ),
+        ),
       );
       return;
     }
@@ -172,22 +461,51 @@ class _AddChildPageState extends State<AddChildPage> {
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to add child")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Failed to add child")));
     } finally {
       if (mounted) setState(() => loading = false);
     }
   }
 
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    const Color navy = Color(0xFF001F3F);
+    const Color blue = Color(0xFF005792);
+
+    return InputDecoration(
+      prefixIcon: Icon(icon, color: blue),
+      labelText: label,
+      labelStyle: const TextStyle(color: blue),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: blue, width: 1.2),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: blue.withOpacity(0.4)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: navy, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    const Color navy = Color(0xFF001F3F);
     const Color blue = Color(0xFF005792);
+    const Color teal = Color(0xFF00B894);
+    const Color offWhite = Color(0xFFF6F7FB);
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: blue,
+        backgroundColor: navy,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
@@ -204,30 +522,39 @@ class _AddChildPageState extends State<AddChildPage> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
+
+            Text(
+              "Add Child Details",
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: navy,
+                letterSpacing: 0.2,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "Set child info and pickup location",
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: blue.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 24),
 
             // Child Name Field
             TextField(
               controller: nameController,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.person_outline, color: blue),
-                labelText: 'Child Name',
-                labelStyle: const TextStyle(color: blue),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: blue),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: blue, width: 2),
-                ),
-              ),
+              decoration: _inputDecoration('Child Name', Icons.person_outline),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             // School Field with Places Autocomplete
             Column(
@@ -235,24 +562,7 @@ class _AddChildPageState extends State<AddChildPage> {
               children: [
                 TextField(
                   controller: schoolController,
-                  decoration: InputDecoration(
-                    prefixIcon:
-                        const Icon(Icons.school_outlined, color: blue),
-                    labelText: 'School',
-                    labelStyle: const TextStyle(color: blue),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: blue),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: blue, width: 2),
-                    ),
-                    suffixIcon: _schoolConfirmed
-                        ? const Icon(Icons.check_circle,
-                            color: Color(0xFF00B894))
-                        : null,
-                  ),
+                  decoration: _inputDecoration('School', Icons.school_outlined),
                   onChanged: _onSchoolChanged,
                 ),
                 if (_schoolSuggestions.isNotEmpty)
@@ -260,12 +570,11 @@ class _AddChildPageState extends State<AddChildPage> {
                     margin: const EdgeInsets.only(top: 2),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: blue.withValues(alpha: 0.3)),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: blue.withOpacity(0.3)),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
+                          color: Colors.black.withOpacity(0.08),
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         ),
@@ -281,18 +590,19 @@ class _AddChildPageState extends State<AddChildPage> {
                       itemBuilder: (context, index) {
                         final suggestion = _schoolSuggestions[index];
                         return ListTile(
-                          leading: const Icon(Icons.school_outlined,
-                              color: Color(0xFF005792), size: 20),
+                          leading: const Icon(
+                            Icons.school_outlined,
+                            color: Color(0xFF005792),
+                            size: 20,
+                          ),
                           title: Text(
                             suggestion.description,
                             style: const TextStyle(fontSize: 14),
                           ),
                           onTap: () {
                             setState(() {
-                              schoolController.text =
-                                  suggestion.description;
+                              schoolController.text = suggestion.description;
                               _schoolSuggestions = [];
-                              _schoolConfirmed = true;
                             });
                           },
                         );
@@ -309,95 +619,300 @@ class _AddChildPageState extends State<AddChildPage> {
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: blue,
+                color: navy,
               ),
             ),
             const SizedBox(height: 6),
             const Text(
-              "Tap on the map to set the pickup point",
+              "Search, select on map, or share current location",
               style: TextStyle(fontSize: 13, color: Colors.grey),
             ),
             const SizedBox(height: 10),
 
-            // Google Map with loading overlay
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                height: 300,
-                child: Stack(
-                  children: [
-                    GoogleMap(
-                      initialCameraPosition: _initialPosition,
-                      onMapCreated: (controller) {
-                        mapController = controller;
-                        if (mounted) {
-                          setState(() => mapReady = true);
-                        }
-                      },
-                      onTap: mapReady
-                          ? (LatLng position) {
-                              if (mounted) {
-                                setState(
-                                    () => selectedLocation = position);
-                              }
-                            }
-                          : null,
-                      markers: selectedLocation != null
-                          ? {
-                              Marker(
-                                markerId: const MarkerId('pickup'),
-                                position: selectedLocation!,
-                                icon:
-                                    BitmapDescriptor.defaultMarkerWithHue(
-                                  BitmapDescriptor.hueBlue,
-                                ),
-                                infoWindow: const InfoWindow(
-                                    title: "Pickup Point"),
-                              ),
-                            }
-                          : {},
-                      myLocationButtonEnabled: false,
-                      zoomControlsEnabled: true,
-                      scrollGesturesEnabled: true,
-                      zoomGesturesEnabled: true,
-                      rotateGesturesEnabled: false,
-                      tiltGesturesEnabled: false,
+            TextField(
+              controller: pickupSearchController,
+              onChanged: _onPickupSearchChanged,
+              decoration: _inputDecoration('Search pickup place', Icons.search)
+                  .copyWith(
+                    suffixIcon: _resolvingPickupPlace
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : (pickupSearchController.text.trim().isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(
+                                    Icons.close,
+                                    color: Colors.grey,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      pickupSearchController.clear();
+                                      _pickupSuggestions = [];
+                                    });
+                                  },
+                                )
+                              : null),
+                  ),
+            ),
+            if (_pickupSuggestions.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: blue.withOpacity(0.3)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
                     ),
+                  ],
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  itemCount: _pickupSuggestions.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1, indent: 16),
+                  itemBuilder: (context, index) {
+                    final suggestion = _pickupSuggestions[index];
+                    return ListTile(
+                      leading: const Icon(
+                        Icons.place_outlined,
+                        color: Color(0xFF005792),
+                        size: 20,
+                      ),
+                      title: Text(
+                        suggestion.description,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      onTap: () => _selectPickupSuggestion(suggestion),
+                    );
+                  },
+                ),
+              ),
 
-                    // Loading overlay until map is ready
-                    if (!mapReady)
-                      Container(
-                        color: Colors.white,
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                            color: Color(0xFF005792),
+            const SizedBox(height: 10),
+
+            Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text("Quick (GPS)"),
+                  labelStyle: TextStyle(
+                    color:
+                        _pickupMode == _PickupSelectionMode.quickCurrentLocation
+                        ? navy
+                        : blue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  selected:
+                      _pickupMode == _PickupSelectionMode.quickCurrentLocation,
+                  selectedColor: teal.withOpacity(0.18),
+                  side: BorderSide(color: blue.withOpacity(0.35)),
+                  backgroundColor: offWhite,
+                  onSelected: (selected) {
+                    if (!selected) return;
+                    setState(
+                      () => _pickupMode =
+                          _PickupSelectionMode.quickCurrentLocation,
+                    );
+                  },
+                ),
+                ChoiceChip(
+                  label: const Text("Map (Manual)"),
+                  labelStyle: TextStyle(
+                    color: _pickupMode == _PickupSelectionMode.interactiveMap
+                        ? navy
+                        : blue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  selected: _pickupMode == _PickupSelectionMode.interactiveMap,
+                  selectedColor: teal.withOpacity(0.18),
+                  side: BorderSide(color: blue.withOpacity(0.35)),
+                  backgroundColor: offWhite,
+                  onSelected: (selected) {
+                    if (!selected) return;
+                    setState(
+                      () => _pickupMode = _PickupSelectionMode.interactiveMap,
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _openFullScreenMapPicker,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: navy,
+                  side: BorderSide(color: teal, width: 1.4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  minimumSize: const Size(double.infinity, 50),
+                  textStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                icon: const Icon(Icons.fullscreen),
+                label: const Text('Open Full-Screen Map Picker'),
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            if (_pickupMode == _PickupSelectionMode.interactiveMap)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  height: 300,
+                  child: Stack(
+                    children: [
+                      GoogleMap(
+                        initialCameraPosition: _initialPosition,
+                        onMapCreated: (controller) {
+                          mapController = controller;
+                          if (mounted) {
+                            setState(() => mapReady = true);
+                          }
+                        },
+                        onTap: mapReady
+                            ? (LatLng position) {
+                                if (mounted) {
+                                  setState(() => selectedLocation = position);
+                                }
+                              }
+                            : null,
+                        markers: selectedLocation != null
+                            ? {
+                                Marker(
+                                  markerId: const MarkerId('pickup'),
+                                  position: selectedLocation!,
+                                  icon: BitmapDescriptor.defaultMarkerWithHue(
+                                    BitmapDescriptor.hueBlue,
+                                  ),
+                                  infoWindow: const InfoWindow(
+                                    title: "Pickup Point",
+                                  ),
+                                ),
+                              }
+                            : {},
+                        myLocationButtonEnabled: false,
+                        zoomControlsEnabled: true,
+                        scrollGesturesEnabled: true,
+                        zoomGesturesEnabled: true,
+                        rotateGesturesEnabled: false,
+                        tiltGesturesEnabled: false,
+                      ),
+
+                      // Loading overlay until map is ready
+                      if (!mapReady)
+                        Container(
+                          color: Colors.white,
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF005792),
+                            ),
                           ),
                         ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  border: Border.all(color: blue.withOpacity(0.25)),
+                  borderRadius: BorderRadius.circular(16),
+                  color: offWhite,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.gps_fixed, color: blue, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "Use your current phone location",
+                            style: TextStyle(
+                              color: blue,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _fetchingCurrentLocation
+                            ? null
+                            : _setCurrentLocation,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: navy,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          minimumSize: const Size(double.infinity, 50),
+                        ),
+                        icon: _fetchingCurrentLocation
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.my_location),
+                        label: Text(
+                          selectedLocation == null
+                              ? "Use Current Location"
+                              : "Refresh Current Location",
+                        ),
                       ),
+                    ),
                   ],
                 ),
               ),
-            ),
 
             // Show selected coordinates
             if (selectedLocation != null) ...[
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 8),
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
-                  color: blue.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(8),
+                  color: teal.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.location_on, color: blue, size: 18),
+                    const Icon(Icons.location_on, color: navy, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         "Lat: ${selectedLocation!.latitude.toStringAsFixed(5)}, "
                         "Lng: ${selectedLocation!.longitude.toStringAsFixed(5)}",
-                        style: const TextStyle(color: blue, fontSize: 13),
+                        style: const TextStyle(color: navy, fontSize: 13),
                       ),
                     ),
                   ],
@@ -405,19 +920,21 @@ class _AddChildPageState extends State<AddChildPage> {
               ),
             ],
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 28),
 
             // Save Button
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 54,
               child: ElevatedButton(
                 onPressed: loading ? null : saveStudent,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: blue,
+                  backgroundColor: navy,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(18),
                   ),
+                  elevation: 6,
+                  shadowColor: navy.withOpacity(0.18),
                 ),
                 child: loading
                     ? const CircularProgressIndicator(
@@ -428,7 +945,7 @@ class _AddChildPageState extends State<AddChildPage> {
                         "Save",
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -446,6 +963,87 @@ class _AddChildPageState extends State<AddChildPage> {
 class _PlaceSuggestion {
   final String description;
   final String placeId;
-  const _PlaceSuggestion(
-      {required this.description, required this.placeId});
+  const _PlaceSuggestion({required this.description, required this.placeId});
+}
+
+class _FullScreenMapPicker extends StatefulWidget {
+  final LatLng? initialLocation;
+  final CameraPosition fallbackCameraPosition;
+
+  const _FullScreenMapPicker({
+    required this.initialLocation,
+    required this.fallbackCameraPosition,
+  });
+
+  @override
+  State<_FullScreenMapPicker> createState() => _FullScreenMapPickerState();
+}
+
+class _FullScreenMapPickerState extends State<_FullScreenMapPicker> {
+  LatLng? _pickedLocation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pickedLocation = widget.initialLocation;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const Color navy = Color(0xFF001F3F);
+    final CameraPosition initialCamera = _pickedLocation != null
+        ? CameraPosition(target: _pickedLocation!, zoom: 16)
+        : widget.fallbackCameraPosition;
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: navy,
+        foregroundColor: Colors.white,
+        title: const Text('Select Pickup Point'),
+      ),
+      body: Stack(
+        children: [
+          GoogleMap(
+            initialCameraPosition: initialCamera,
+            onTap: (LatLng position) {
+              setState(() => _pickedLocation = position);
+            },
+            markers: _pickedLocation == null
+                ? {}
+                : {
+                    Marker(
+                      markerId: const MarkerId('full_screen_pickup'),
+                      position: _pickedLocation!,
+                      infoWindow: const InfoWindow(title: 'Pickup Point'),
+                    ),
+                  },
+            myLocationButtonEnabled: true,
+            zoomControlsEnabled: true,
+            rotateGesturesEnabled: false,
+            tiltGesturesEnabled: false,
+          ),
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 24,
+            child: ElevatedButton.icon(
+              onPressed: _pickedLocation == null
+                  ? null
+                  : () => Navigator.pop(context, _pickedLocation),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: navy,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 52),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              icon: const Icon(Icons.check),
+              label: const Text('Use This Location'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

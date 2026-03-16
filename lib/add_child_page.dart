@@ -1,7 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:http/http.dart' as http;
 
 class AddChildPage extends StatefulWidget {
   const AddChildPage({super.key});
@@ -21,6 +24,11 @@ class _AddChildPageState extends State<AddChildPage> {
 
   final String parentId = FirebaseAuth.instance.currentUser!.uid;
 
+  static const String _googlePlacesApiKey = '***REMOVED***';
+  List<_PlaceSuggestion> _schoolSuggestions = [];
+  bool _schoolConfirmed = false;
+  Timer? _schoolSearchTimer;
+
   static const CameraPosition _initialPosition = CameraPosition(
     target: LatLng(6.9271, 79.8612),
     zoom: 13,
@@ -31,7 +39,103 @@ class _AddChildPageState extends State<AddChildPage> {
     nameController.dispose();
     schoolController.dispose();
     mapController?.dispose();
+    _schoolSearchTimer?.cancel();
     super.dispose();
+  }
+
+  Future<List<_PlaceSuggestion>> _fetchSchoolSuggestions(String query) async {
+    final String trimmedQuery = query.trim();
+    if (_googlePlacesApiKey.isEmpty || trimmedQuery.length < 2) return [];
+
+    try {
+      final Uri newApiUri = Uri.https(
+        'places.googleapis.com',
+        '/v1/places:autocomplete',
+      );
+      final Map<String, dynamic> payload = {
+        'input': trimmedQuery,
+        'languageCode': 'en',
+        'regionCode': 'lk',
+        'includedRegionCodes': ['lk'],
+        'includedPrimaryTypes': ['school'],
+      };
+
+      final http.Response newApiResponse = await http.post(
+        newApiUri,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': _googlePlacesApiKey,
+          'X-Goog-FieldMask':
+              'suggestions.placePrediction.place,suggestions.placePrediction.text.text',
+        },
+        body: jsonEncode(payload),
+      );
+
+      if (newApiResponse.statusCode == 200) {
+        final decoded =
+            jsonDecode(newApiResponse.body) as Map<String, dynamic>;
+        final suggestions = decoded['suggestions'] as List<dynamic>? ?? [];
+        final mapped = suggestions.map((item) {
+          final placePrediction =
+              (item as Map<String, dynamic>)['placePrediction']
+                  as Map<String, dynamic>? ??
+              {};
+          final text =
+              placePrediction['text'] as Map<String, dynamic>? ?? {};
+          final placePath = placePrediction['place'] as String? ?? '';
+          return _PlaceSuggestion(
+            description: text['text'] as String? ?? '',
+            placeId: placePath.startsWith('places/')
+                ? placePath.substring('places/'.length)
+                : placePath,
+          );
+        }).where((s) => s.description.isNotEmpty).take(5).toList();
+
+        if (mapped.isNotEmpty) return mapped;
+      }
+    } catch (_) {}
+
+    // Fallback to legacy endpoint
+    final Uri legacyUri = Uri.https(
+      'maps.googleapis.com',
+      '/maps/api/place/autocomplete/json',
+      {
+        'input': trimmedQuery,
+        'key': _googlePlacesApiKey,
+        'types': 'establishment',
+        'components': 'country:lk',
+        'region': 'lk',
+      },
+    );
+
+    final legacyResponse = await http.get(legacyUri);
+    if (legacyResponse.statusCode != 200) return [];
+
+    final decodedLegacy =
+        jsonDecode(legacyResponse.body) as Map<String, dynamic>;
+    final status = decodedLegacy['status'] as String? ?? 'UNKNOWN_ERROR';
+    if (status != 'OK' && status != 'ZERO_RESULTS') return [];
+
+    final predictions =
+        decodedLegacy['predictions'] as List<dynamic>? ?? [];
+    return predictions.map((item) {
+      final p = item as Map<String, dynamic>;
+      return _PlaceSuggestion(
+        description: p['description'] as String? ?? '',
+        placeId: p['place_id'] as String? ?? '',
+      );
+    }).take(5).toList();
+  }
+
+  void _onSchoolChanged(String value) {
+    _schoolConfirmed = false;
+    _schoolSearchTimer?.cancel();
+    _schoolSearchTimer =
+        Timer(const Duration(milliseconds: 350), () async {
+      final suggestions = await _fetchSchoolSuggestions(value);
+      if (!mounted) return;
+      setState(() => _schoolSuggestions = suggestions);
+    });
   }
 
   Future<void> saveStudent() async {
@@ -44,7 +148,8 @@ class _AddChildPageState extends State<AddChildPage> {
 
     if (selectedLocation == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select a pickup location on the map")),
+        const SnackBar(
+            content: Text("Please select a pickup location on the map")),
       );
       return;
     }
@@ -124,22 +229,77 @@ class _AddChildPageState extends State<AddChildPage> {
             ),
             const SizedBox(height: 20),
 
-            // School Field
-            TextField(
-              controller: schoolController,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.school_outlined, color: blue),
-                labelText: 'School',
-                labelStyle: const TextStyle(color: blue),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: blue),
+            // School Field with Places Autocomplete
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: schoolController,
+                  decoration: InputDecoration(
+                    prefixIcon:
+                        const Icon(Icons.school_outlined, color: blue),
+                    labelText: 'School',
+                    labelStyle: const TextStyle(color: blue),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: blue),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: blue, width: 2),
+                    ),
+                    suffixIcon: _schoolConfirmed
+                        ? const Icon(Icons.check_circle,
+                            color: Color(0xFF00B894))
+                        : null,
+                  ),
+                  onChanged: _onSchoolChanged,
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: blue, width: 2),
-                ),
-              ),
+                if (_schoolSuggestions.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: blue.withValues(alpha: 0.3)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      itemCount: _schoolSuggestions.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, indent: 16),
+                      itemBuilder: (context, index) {
+                        final suggestion = _schoolSuggestions[index];
+                        return ListTile(
+                          leading: const Icon(Icons.school_outlined,
+                              color: Color(0xFF005792), size: 20),
+                          title: Text(
+                            suggestion.description,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          onTap: () {
+                            setState(() {
+                              schoolController.text =
+                                  suggestion.description;
+                              _schoolSuggestions = [];
+                              _schoolConfirmed = true;
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 28),
 
@@ -177,7 +337,8 @@ class _AddChildPageState extends State<AddChildPage> {
                       onTap: mapReady
                           ? (LatLng position) {
                               if (mounted) {
-                                setState(() => selectedLocation = position);
+                                setState(
+                                    () => selectedLocation = position);
                               }
                             }
                           : null,
@@ -186,11 +347,12 @@ class _AddChildPageState extends State<AddChildPage> {
                               Marker(
                                 markerId: const MarkerId('pickup'),
                                 position: selectedLocation!,
-                                icon: BitmapDescriptor.defaultMarkerWithHue(
+                                icon:
+                                    BitmapDescriptor.defaultMarkerWithHue(
                                   BitmapDescriptor.hueBlue,
                                 ),
-                                infoWindow:
-                                    const InfoWindow(title: "Pickup Point"),
+                                infoWindow: const InfoWindow(
+                                    title: "Pickup Point"),
                               ),
                             }
                           : {},
@@ -221,7 +383,8 @@ class _AddChildPageState extends State<AddChildPage> {
             if (selectedLocation != null) ...[
               const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: blue.withValues(alpha: 0.07),
                   borderRadius: BorderRadius.circular(8),
@@ -278,4 +441,11 @@ class _AddChildPageState extends State<AddChildPage> {
       ),
     );
   }
+}
+
+class _PlaceSuggestion {
+  final String description;
+  final String placeId;
+  const _PlaceSuggestion(
+      {required this.description, required this.placeId});
 }

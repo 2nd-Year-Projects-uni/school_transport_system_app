@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 void main() {
   runApp(MaterialApp(debugShowCheckedModeBanner: false, home: HomeScreen()));
@@ -601,6 +603,169 @@ class _DepositSlipUploadScreenState extends State<DepositSlipUploadScreen> {
                       }
                     : null,
                 child: Text("Submit Payment", style: TextStyle(fontSize: 16)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+//--------------payment status screen ----------------------------------------------------------------------------------------------------
+class PaymentStatusScreen extends StatefulWidget {
+  final String time;
+
+  PaymentStatusScreen({required this.time});
+
+  @override
+  State<PaymentStatusScreen> createState() => _PaymentStatusScreenState();
+}
+
+class _PaymentStatusScreenState extends State<PaymentStatusScreen> {
+  bool isApproved = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    Future.delayed(Duration(seconds: 5), () {
+      setState(() {
+        isApproved = true;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey.shade200,
+      appBar: AppBar(
+        title: Text("Payment Status"),
+        backgroundColor: Color(0xff2B4CDB),
+      ),
+      body: Padding(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          children: [
+            SizedBox(height: 20),
+            Container(
+              padding: EdgeInsets.all(30),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isApproved
+                    ? Colors.green.shade100
+                    : Colors.orange.shade100,
+              ),
+              child: Icon(
+                isApproved ? Icons.check_circle : Icons.hourglass_top,
+                size: 60,
+                color: isApproved ? Colors.green : Colors.orange,
+              ),
+            ),
+            SizedBox(height: 20),
+            Text(
+              isApproved ? "Payment Confirmed" : "Payment Submitted",
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 10),
+            Text(
+              isApproved
+                  ? "Your transport payment has been verified successfully."
+                  : "Your payment is under review by the admin.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+            SizedBox(height: 30),
+            Container(
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.green),
+                      SizedBox(width: 10),
+                      Expanded(child: Text("Slip Uploaded")),
+                      Text(widget.time),
+                    ],
+                  ),
+                  Divider(height: 30),
+                  Row(
+                    children: [
+                      Icon(
+                        isApproved ? Icons.check_circle : Icons.hourglass_empty,
+                        color: isApproved ? Colors.green : Colors.orange,
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(child: Text("Admin Verification")),
+                      Text(isApproved ? "Approved" : "Pending"),
+                    ],
+                  ),
+                  Divider(height: 30),
+                  Row(
+                    children: [
+                      Icon(
+                        isApproved
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
+                        color: isApproved ? Colors.green : Colors.grey,
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(child: Text("Payment Confirmed")),
+                      Text(isApproved ? "Completed" : "-"),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 30),
+            Container(
+              padding: EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: isApproved
+                    ? Colors.green.shade100
+                    : Colors.orange.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.circle,
+                    size: 10,
+                    color: isApproved ? Colors.green : Colors.orange,
+                  ),
+                  SizedBox(width: 10),
+                  Text(
+                    isApproved
+                        ? "Payment Verified Successfully"
+                        : "Awaiting Admin Approval",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 30),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: Icon(Icons.home),
+                label: Text("Back to Home"),
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  side: BorderSide(color: Color(0xff2B4CDB), width: 2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
+                onPressed: () {
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                },
               ),
             ),
           ],

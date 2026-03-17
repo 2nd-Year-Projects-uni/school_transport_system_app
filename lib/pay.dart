@@ -276,6 +276,13 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
   String? selectedOption;
 
   List<Map<String, dynamic>> paymentOptions = [
+    //paypal
+    {
+      "icon": Icons.payment,
+      "title": "PayPal",
+      "subtitle": "Secure online payment",
+    },
+
     {
       "icon": Icons.upload_file,
       "title": "Deposit Slip",

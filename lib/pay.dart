@@ -169,6 +169,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           "April",
                           "May",
                           "June",
+                          "July",
+                          "August",
+                          "September",
+                          "October",
+                          "November",
+                          "December",
                         ].map((month) {
                           return DropdownMenuItem(
                             value: month,

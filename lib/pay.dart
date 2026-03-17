@@ -774,3 +774,22 @@ class _PaymentStatusScreenState extends State<PaymentStatusScreen> {
     );
   }
 }
+
+// ---------------- Billing History --------------------------------------------------------------------------------------------------------
+class BillingHistoryScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Billing History"),
+        backgroundColor: Color(0xff2B4CDB),
+      ),
+      body: Center(
+        child: Text(
+          "Billing history will be displayed here.",
+          style: TextStyle(fontSize: 16),
+        ),
+      ),
+    );
+  }
+}

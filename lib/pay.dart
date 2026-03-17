@@ -259,3 +259,138 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
+//pay 2 options
+
+// ------------------ Payment Options Screen ----------------
+class PaymentOptionsScreen extends StatefulWidget {
+  final String fee;
+  final String month;
+
+  PaymentOptionsScreen({required this.fee, required this.month});
+
+  @override
+  State<PaymentOptionsScreen> createState() => _PaymentOptionsScreenState();
+}
+
+class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
+  String? selectedOption;
+
+  List<Map<String, dynamic>> paymentOptions = [
+    {
+      "icon": Icons.upload_file,
+      "title": "Deposit Slip",
+      "subtitle": "Upload your bank slip",
+    },
+    {
+      "icon": Icons.directions_bus,
+      "title": "Driver Collection",
+      "subtitle": "Pay cash directly to the driver",
+    },
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Select Payment Method"),
+        backgroundColor: Color(0xff2B4CDB),
+        elevation: 0,
+      ),
+      body: Padding(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView.builder(
+                itemCount: paymentOptions.length,
+                itemBuilder: (context, index) {
+                  var option = paymentOptions[index];
+                  bool isSelected = selectedOption == option['title'];
+
+                  return Container(
+                    margin: EdgeInsets.only(bottom: 15),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue.shade50 : Colors.white,
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                      border: Border.all(
+                        color: isSelected ? Colors.blue : Colors.grey.shade300,
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: ListTile(
+                      onTap: () {
+                        setState(() {
+                          selectedOption = option['title'];
+                        });
+                      },
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.blue.shade700,
+                        child: Icon(option['icon'], color: Colors.white),
+                      ),
+                      title: Text(
+                        option['title'],
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      subtitle: Text(option['subtitle']),
+                      trailing: isSelected
+                          ? Icon(Icons.check_circle, color: Colors.blue)
+                          : null,
+                    ),
+                  );
+                },
+              ),
+            ),
+            if (selectedOption != null)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: Color(0xff2B4CDB),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                  onPressed: () {
+                    if (selectedOption == "Deposit Slip") {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DepositSlipUploadScreen(
+                            fee: widget.fee,
+                            month: widget.month,
+                          ),
+                        ),
+                      );
+                    } else if (selectedOption == "Driver Collection") {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            "Driver Collection selected for Rs ${widget.fee} (${widget.month})",
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: Text(
+                    "Proceed with $selectedOption",
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'add_child_page.dart';
-
 import 'package:firebase_core/firebase_core.dart';
-import 'login.dart';
+import 'pay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +14,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'School Van App',
       debugShowCheckedModeBanner: false,
-      home: LoginPage(),
+      home: HomeScreen(),
     );
   }
 }

@@ -96,14 +96,44 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: Colors.white24,
-                        child: Icon(Icons.notifications, color: Colors.white),
-                      ),
-                    ],
-                  ),
+  mainAxisAlignment: MainAxisAlignment.end,
+  children: [
+    Stack(
+      children: [
+        IconButton(
+          icon: Icon(Icons.notifications, color: Colors.white, size: 28),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const NotificationScreen(),
+              ),
+            );
+          },
+        ),
+        Positioned(
+          right: 6,
+          top: 6,
+          child: Container(
+            padding: EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              "3", // number of unread notifications
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ],
+),
                   SizedBox(height: 20),
                   Text(
                     "$greeting!",

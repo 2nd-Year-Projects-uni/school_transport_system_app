@@ -401,3 +401,211 @@ class _PaymentOptionsScreenState extends State<PaymentOptionsScreen> {
     );
   }
 }
+
+//deposite slip option file
+
+// ---------------- Deposit Slip Upload Screen ----------------
+class DepositSlipUploadScreen extends StatefulWidget {
+  final String fee;
+  final String month;
+
+  DepositSlipUploadScreen({required this.fee, required this.month});
+
+  @override
+  State<DepositSlipUploadScreen> createState() =>
+      _DepositSlipUploadScreenState();
+}
+
+class _DepositSlipUploadScreenState extends State<DepositSlipUploadScreen> {
+  File? _image;
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> pickImage(ImageSource source) async {
+    final pickedFile = await _picker.pickImage(
+      source: source,
+      imageQuality: 70,
+    );
+    if (pickedFile != null) {
+      setState(() {
+        _image = File(pickedFile.path);
+      });
+    }
+  }
+
+  void showUploadOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.camera_alt),
+              title: Text("Camera"),
+              onTap: () {
+                Navigator.pop(context);
+                pickImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.photo_library),
+              title: Text("Gallery"),
+              onTap: () {
+                Navigator.pop(context);
+                pickImage(ImageSource.gallery);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void removeImage() {
+    setState(() {
+      _image = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Upload Deposit Slip"),
+        backgroundColor: Color(0xff2B4CDB),
+      ),
+      body: Padding(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Bank Name", style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              "Bank of Ceylon",
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            SizedBox(height: 15),
+            Text(
+              "Reference Number",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              "BOC${DateTime.now().millisecondsSinceEpoch}",
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            SizedBox(height: 15),
+            Text(
+              "Transfer Amount",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              "Rs ${widget.fee}",
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            SizedBox(height: 20),
+            GestureDetector(
+              onTap: showUploadOptions,
+              child: Container(
+                height: 150,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: _image == null
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.upload_file, color: Colors.blue, size: 40),
+                          SizedBox(height: 10),
+                          Text("Tap to upload deposit slip"),
+                          Text(
+                            "Choose Camera or Gallery",
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      )
+                    : Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(15),
+                            child: Image.file(
+                              _image!,
+                              width: double.infinity,
+                              height: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          Positioned(
+                            top: 5,
+                            right: 5,
+                            child: GestureDetector(
+                              onTap: removeImage,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Padding(
+                                  padding: EdgeInsets.all(4),
+                                  child: Icon(
+                                    Icons.close,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 5,
+                            right: 5,
+                            child: Icon(
+                              Icons.check_circle,
+                              color: Colors.green,
+                              size: 28,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+            SizedBox(height: 10),
+            Text(
+              "Note: Please upload a clear deposit slip before submitting.",
+              style: TextStyle(fontSize: 12, color: Colors.red),
+            ),
+            SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: _image != null
+                      ? Color(0xff2B4CDB)
+                      : Colors.grey,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: _image != null
+                    ? () {
+                        final time = DateTime.now().toLocal().toString();
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PaymentStatusScreen(time: time),
+                          ),
+                        );
+                      }
+                    : null,
+                child: Text("Submit Payment", style: TextStyle(fontSize: 16)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

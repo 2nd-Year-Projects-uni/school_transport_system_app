@@ -29,12 +29,7 @@ class HomeTab extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => PayPage(
-                      childId: childId,
-                      childName: childName,
-                    ),
-                  ),
+                  MaterialPageRoute(builder: (_) => HomeScreen()),
                 );
               },
               icon: const Icon(Icons.payment, color: Colors.white),

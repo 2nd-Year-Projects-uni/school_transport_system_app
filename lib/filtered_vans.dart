@@ -409,51 +409,6 @@ class _FilteredVansPageState extends State<FilteredVansPage>
     return names.any((name) => name.toLowerCase().contains(queryLower));
   }
 
-  bool _isInsuranceActive(Map<String, dynamic> van) {
-    final dynamic rawValue = van['insuranceExpiryDate'];
-    if (rawValue == null) return false;
-
-    if (rawValue is Timestamp) {
-      return rawValue.toDate().isAfter(DateTime.now());
-    }
-
-    if (rawValue is String) {
-      final parts = rawValue.split('/');
-      if (parts.length == 3) {
-        final day = int.tryParse(parts[0]);
-        final month = int.tryParse(parts[1]);
-        final year = int.tryParse(parts[2]);
-        if (day != null && month != null && year != null) {
-          final expiry = DateTime(year, month, day, 23, 59, 59);
-          return expiry.isAfter(DateTime.now());
-        }
-      }
-
-      final parsed = DateTime.tryParse(rawValue);
-      if (parsed != null) return parsed.isAfter(DateTime.now());
-    }
-
-    return false;
-  }
-
-  void _showRankingInfo() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('How Vehicles Are Ranked'),
-        content: const Text(
-          'Vehicles are first filtered by school match, then sorted by the closest distance between your pickup point and each vehicle\'s route.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Got it'),
-          ),
-        ],
-      ),
-    );
-  }
-
   List<LatLng> _extractRouteLatLng(Map<String, dynamic> van) {
     final List<LatLng> points = [];
     final start = van['startingLocation'] as Map<String, dynamic>?;
@@ -504,11 +459,6 @@ class _FilteredVansPageState extends State<FilteredVansPage>
       }
     }
     return schools;
-  }
-
-  bool _hasRouteCoverage(Map<String, dynamic> van) {
-    final points = _extractRouteLatLng(van);
-    return points.length >= 2;
   }
 
   void _openMapPreview(Map<String, dynamic> van) {

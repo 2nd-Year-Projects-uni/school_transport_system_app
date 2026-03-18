@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'services/location_service.dart';
 
 class DriverHomePage extends StatefulWidget {
@@ -18,6 +19,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
   bool _isAssignedVehicleExpanded = false;
   bool _isJoinVehicleExpanded = false;
   bool _isLeaving = false;
+  bool _isOpeningJourney = false;
 
   String _placeName(dynamic place) {
     if (place is String) {
@@ -37,6 +39,139 @@ class _DriverHomePageState extends State<DriverHomePage> {
     return list.map(_placeName).where((name) => name.isNotEmpty).toList();
   }
 
+  List<_JourneyPoint> _extractJourneyPoints(
+    dynamic source,
+    String fallbackLabel,
+  ) {
+    final list = source as List<dynamic>? ?? const <dynamic>[];
+    final points = <_JourneyPoint>[];
+
+    for (final item in list) {
+      if (item is! Map) continue;
+      final lat = (item['latitude'] as num?)?.toDouble();
+      final lng = (item['longitude'] as num?)?.toDouble();
+      if (lat == null || lng == null) continue;
+      final name = _placeName(item);
+      points.add(
+        _JourneyPoint(
+          latitude: lat,
+          longitude: lng,
+          label: name.isNotEmpty ? name : fallbackLabel,
+        ),
+      );
+    }
+
+    return points;
+  }
+
+  _JourneyPlan? _resolveJourneyPlan() {
+    final data = _currentVehicleData;
+    if (data == null) return null;
+
+    final schools = _extractJourneyPoints(data['schools'], 'School');
+    final routePoints = _extractJourneyPoints(
+      data['routePoints'],
+      'Checkpoint',
+    );
+
+    if (schools.isNotEmpty) {
+      final destination = schools.last;
+      final schoolStops = schools.take(schools.length - 1).toList();
+
+      final checkpointWaypoints = routePoints
+          .map((point) => _JourneyWaypoint(point: point, isCheckpoint: true))
+          .toList();
+
+      final schoolWaypoints = schoolStops
+          .map((point) => _JourneyWaypoint(point: point, isCheckpoint: false))
+          .toList();
+
+      final waypoints = [...checkpointWaypoints, ...schoolWaypoints];
+
+      return _JourneyPlan(destination: destination, waypoints: waypoints);
+    }
+
+    if (routePoints.isNotEmpty) {
+      return _JourneyPlan(destination: routePoints.first, waypoints: const []);
+    }
+
+    final startingLocation = data['startingLocation'];
+    if (startingLocation is Map) {
+      final lat = (startingLocation['latitude'] as num?)?.toDouble();
+      final lng = (startingLocation['longitude'] as num?)?.toDouble();
+      if (lat != null && lng != null) {
+        final name = _placeName(startingLocation);
+        return _JourneyPlan(
+          destination: _JourneyPoint(
+            latitude: lat,
+            longitude: lng,
+            label: name.isNotEmpty ? name : 'Starting location',
+          ),
+          waypoints: const [],
+        );
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _startJourneyInGoogleMaps() async {
+    if (_isOpeningJourney) return;
+
+    final plan = _resolveJourneyPlan();
+    if (plan == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No destination found for this vehicle yet.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isOpeningJourney = true);
+    try {
+      final destinationLat = plan.destination.latitude.toStringAsFixed(6);
+      final destinationLng = plan.destination.longitude.toStringAsFixed(6);
+
+      final waypointParam = plan.waypoints
+          .map((waypoint) {
+            final lat = waypoint.point.latitude.toStringAsFixed(6);
+            final lng = waypoint.point.longitude.toStringAsFixed(6);
+            return '$lat,$lng';
+          })
+          .join('|');
+
+      final query = <String, String>{
+        'api': '1',
+        'destination': '$destinationLat,$destinationLng',
+        'travelmode': 'driving',
+      };
+      if (waypointParam.isNotEmpty) {
+        query['waypoints'] = waypointParam;
+      }
+
+      final directionsUri = Uri.https('www.google.com', '/maps/dir/', query);
+      final launched = await launchUrl(
+        directionsUri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Google Maps.')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not start journey navigation.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isOpeningJourney = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -49,9 +184,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
       await _locationService.startTracking();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Location error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Location error: $e')));
       }
     }
   }
@@ -1264,20 +1399,88 @@ class _DriverHomePageState extends State<DriverHomePage> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          if (_locationService.isTracking) {
-            await _locationService.stopTracking();
-          } else {
-            await _startLocationTracking();
-          }
-          if (mounted) setState(() {});
-        },
-        backgroundColor: _locationService.isTracking ? Colors.red : Colors.green,
-        child: Icon(
-          _locationService.isTracking ? Icons.location_off : Icons.location_on,
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: SizedBox(
+            height: 56,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF00355F), Color(0xFF005792)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: navy.withOpacity(0.22),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: ElevatedButton.icon(
+                onPressed: _isOpeningJourney ? null : _startJourneyInGoogleMaps,
+                style: ElevatedButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: Colors.transparent,
+                  disabledBackgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                icon: _isOpeningJourney
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.navigation_rounded, color: Colors.white),
+                label: const Text(
+                  'Start Journey',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
+}
+
+class _JourneyPoint {
+  final double latitude;
+  final double longitude;
+  final String label;
+
+  const _JourneyPoint({
+    required this.latitude,
+    required this.longitude,
+    required this.label,
+  });
+}
+
+class _JourneyWaypoint {
+  final _JourneyPoint point;
+  final bool isCheckpoint;
+
+  const _JourneyWaypoint({required this.point, required this.isCheckpoint});
+}
+
+class _JourneyPlan {
+  final _JourneyPoint destination;
+  final List<_JourneyWaypoint> waypoints;
+
+  const _JourneyPlan({required this.destination, required this.waypoints});
 }

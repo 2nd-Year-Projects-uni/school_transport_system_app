@@ -20,9 +20,19 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  static const Color navy = Color(0xFF001F3F);
+  static const Color blue = Color(0xFF005792);
+  static const Color teal = Color(0xFF00B894);
+
   int _currentIndex = 0;
 
   late final List<Widget> _pages;
+  final List<String> _tabLabels = const [
+    'Home',
+    'Map',
+    'Attendance',
+    'Notices',
+  ];
 
   @override
   void initState() {
@@ -35,110 +45,157 @@ class _DashboardPageState extends State<DashboardPage> {
     ];
   }
 
+  void _onMenuSelected(String value) {
+    if (value == 'driver_info') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DriverInfoPage(
+            childId: widget.childId,
+            childName: widget.childName,
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (value == 'settings') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChildSettingsPage(
+            childId: widget.childId,
+            childName: widget.childName,
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    const Color teal = Color(0xFF00B894);
-
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F8FC),
       appBar: AppBar(
-        backgroundColor: teal,
+        backgroundColor: navy,
+        elevation: 0,
         centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
-          widget.childName,
+          _tabLabels[_currentIndex],
           style: const TextStyle(
             color: Colors.white,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w700,
             fontSize: 20,
           ),
         ),
         actions: [
-    PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, color: Colors.white),
-      onSelected: (value) {
-        if (value == 'driver_info') {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => DriverInfoPage(
-                childId: widget.childId,
-                childName: widget.childName,
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onSelected: _onMenuSelected,
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'driver_info',
+                child: Row(
+                  children: [
+                    Icon(Icons.person_outline, color: Color(0xFF001F3F)),
+                    SizedBox(width: 10),
+                    Text('Driver Info'),
+                  ],
+                ),
               ),
-            ),
-          );
-        } else if (value == 'settings') {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ChildSettingsPage(
-                childId: widget.childId,
-                childName: widget.childName,
+              PopupMenuItem(
+                value: 'settings',
+                child: Row(
+                  children: [
+                    Icon(Icons.settings_outlined, color: Color(0xFF001F3F)),
+                    SizedBox(width: 10),
+                    Text('Settings'),
+                  ],
+                ),
               ),
-            ),
-          );
-        }
-      },
-      itemBuilder: (_) => const [
-        PopupMenuItem(
-          value: 'driver_info',
-          child: Row(
-            children: [
-              Icon(Icons.person_outline, color: Color(0xFF001F3F)),
-              SizedBox(width: 10),
-              Text('Driver Info'),
             ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'settings',
-          child: Row(
-            children: [
-              Icon(Icons.settings_outlined, color: Color(0xFF001F3F)),
-              SizedBox(width: 10),
-              Text('Settings'),
-            ],
-          ),
-        ),
-      ],
-    ),
-  ],
-      ),
-      body: _pages[_currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        selectedItemColor: teal,
-        unselectedItemColor: Colors.grey,
-        backgroundColor: Colors.white,
-        elevation: 10,
-        type: BottomNavigationBarType.fixed, // needed for 4+ items
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined),
-            activeIcon: Icon(Icons.map),
-            label: 'Map',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month_outlined),
-            activeIcon: Icon(Icons.calendar_month),
-            label: 'Attendance',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_outlined),
-            activeIcon: Icon(Icons.notifications),
-            label: 'Notices',
           ),
         ],
+      ),
+      body: IndexedStack(index: _currentIndex, children: _pages),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: navy.withValues(alpha: 0.08),
+              blurRadius: 18,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: NavigationBarTheme(
+                data: NavigationBarThemeData(
+                  backgroundColor: const Color(0xFFF4F8FD),
+                  indicatorColor: teal.withValues(alpha: 0.18),
+                  iconTheme: WidgetStateProperty.resolveWith((states) {
+                    final selected = states.contains(WidgetState.selected);
+                    return IconThemeData(
+                      color: selected
+                          ? const Color(0xFF008B6F)
+                          : navy.withValues(alpha: 0.62),
+                      size: selected ? 24 : 22,
+                    );
+                  }),
+                  labelTextStyle: WidgetStateProperty.resolveWith((states) {
+                    final selected = states.contains(WidgetState.selected);
+                    return TextStyle(
+                      color: selected
+                          ? const Color(0xFF008B6F)
+                          : navy.withValues(alpha: 0.62),
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    );
+                  }),
+                ),
+                child: NavigationBar(
+                  height: 66,
+                  selectedIndex: _currentIndex,
+                  onDestinationSelected: (index) =>
+                      setState(() => _currentIndex = index),
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.home_outlined),
+                      selectedIcon: Icon(Icons.home_rounded),
+                      label: 'Home',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.map_outlined),
+                      selectedIcon: Icon(Icons.map_rounded),
+                      label: 'Map',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.calendar_month_outlined),
+                      selectedIcon: Icon(Icons.calendar_month_rounded),
+                      label: 'Attendance',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.notifications_outlined),
+                      selectedIcon: Icon(Icons.notifications_rounded),
+                      label: 'Notices',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
 }
-
-
 
 // ── MAP TAB ───────────────────────────────────────────────
 class MapTab extends StatelessWidget {

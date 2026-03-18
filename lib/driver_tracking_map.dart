@@ -50,7 +50,8 @@ class _DriverTrackingMapPageState extends State<DriverTrackingMapPage> {
       }
     }
 
-    final startingLocation = vehicleData?['startingLocation'] as Map<String, dynamic>?;
+    final startingLocation =
+        vehicleData?['startingLocation'] as Map<String, dynamic>?;
     if (startingLocation != null) {
       return _toLatLngFromMap(startingLocation);
     }
@@ -61,11 +62,6 @@ class _DriverTrackingMapPageState extends State<DriverTrackingMapPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF00B894),
-        title: Text('Map - ${widget.childName}', style: const TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('Children')
@@ -105,7 +101,9 @@ class _DriverTrackingMapPageState extends State<DriverTrackingMapPage> {
               final drivers = (vehicleData?['drivers'] as List<dynamic>?) ?? [];
 
               if (drivers.isEmpty) {
-                return const Center(child: Text('No driver assigned to the vehicle yet.'));
+                return const Center(
+                  child: Text('No driver assigned to the vehicle yet.'),
+                );
               }
 
               final firstDriver = drivers.firstWhere(
@@ -114,14 +112,19 @@ class _DriverTrackingMapPageState extends State<DriverTrackingMapPage> {
               );
 
               if (firstDriver == null || firstDriver is! Map<String, dynamic>) {
-                return const Center(child: Text('Driver information is not available.'));
+                return const Center(
+                  child: Text('Driver information is not available.'),
+                );
               }
 
               final driverUid = (firstDriver['uid'] as String?)?.trim();
-              final driverName = (firstDriver['name'] as String?)?.trim() ?? 'Unknown Driver';
+              final driverName =
+                  (firstDriver['name'] as String?)?.trim() ?? 'Unknown Driver';
 
               if (driverUid == null || driverUid.isEmpty) {
-                return const Center(child: Text('Driver UID is missing in vehicle data.'));
+                return const Center(
+                  child: Text('Driver UID is missing in vehicle data.'),
+                );
               }
 
               return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -131,22 +134,32 @@ class _DriverTrackingMapPageState extends State<DriverTrackingMapPage> {
                     .snapshots(),
                 builder: (context, driverSnapshot) {
                   if (driverSnapshot.hasError) {
-                    return Center(child: Text('Error: ${driverSnapshot.error}'));
+                    return Center(
+                      child: Text('Error: ${driverSnapshot.error}'),
+                    );
                   }
                   if (!driverSnapshot.hasData || !driverSnapshot.data!.exists) {
-                    return const Center(child: Text('Driver account not found.'));
+                    return const Center(
+                      child: Text('Driver account not found.'),
+                    );
                   }
 
                   final driverData = driverSnapshot.data!.data();
-                  final driverLocation = _getDriverLocationFromDocument(driverData, vehicleData);
+                  final driverLocation = _getDriverLocationFromDocument(
+                    driverData,
+                    vehicleData,
+                  );
                   final marker = Marker(
                     markerId: const MarkerId('driverLocation'),
                     position: driverLocation,
                     infoWindow: InfoWindow(
                       title: driverName,
-                      snippet: 'Vehicle: ${vehicleData?['registerNumber'] ?? vanId}',
+                      snippet:
+                          'Vehicle: ${vehicleData?['registerNumber'] ?? vanId}',
                     ),
-                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+                    icon: BitmapDescriptor.defaultMarkerWithHue(
+                      BitmapDescriptor.hueAzure,
+                    ),
                   );
 
                   final CameraPosition cameraPosition = CameraPosition(
@@ -173,10 +186,15 @@ class _DriverTrackingMapPageState extends State<DriverTrackingMapPage> {
                         child: Card(
                           elevation: 3,
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
                             child: Text(
                               'Tracking driver: $driverName\nVehicle code: ${vehicleData?['code'] ?? 'N/A'}',
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),

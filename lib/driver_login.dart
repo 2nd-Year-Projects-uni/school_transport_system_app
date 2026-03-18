@@ -260,32 +260,42 @@ class _DriverLoginPageState extends State<DriverLoginPage>
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _licenseFront == null ? blue : teal,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+            Expanded(
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _licenseFront == null ? blue : teal,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
-              ),
-              onPressed: () => _pickLicenseImage(true),
-              icon: const Icon(Icons.upload_file),
-              label: Text(
-                _licenseFront == null ? 'Front Side' : 'Front Uploaded',
+                onPressed: () => _pickLicenseImage(true),
+                icon: const Icon(Icons.upload_file),
+                label: Text(
+                  _licenseFront == null ? 'Front Side' : 'Front Uploaded',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
             const SizedBox(width: 12),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _licenseBack == null ? blue : teal,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+            Expanded(
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _licenseBack == null ? blue : teal,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: () => _pickLicenseImage(false),
+                icon: const Icon(Icons.upload_file),
+                label: Text(
+                  _licenseBack == null ? 'Back Side' : 'Back Uploaded',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              onPressed: () => _pickLicenseImage(false),
-              icon: const Icon(Icons.upload_file),
-              label: Text(_licenseBack == null ? 'Back Side' : 'Back Uploaded'),
             ),
           ],
         ),

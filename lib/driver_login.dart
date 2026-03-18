@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dart:math' as math;
 import 'services/auth_service.dart';
 import 'driver_home.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';

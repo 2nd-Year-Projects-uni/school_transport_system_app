@@ -66,11 +66,8 @@ class _SignupPageState extends State<SignupPage> {
 
   @override
   Widget build(BuildContext context) {
-    final Color offWhite = const Color(0xFFF6F7FB);
     final Color navy = const Color(0xFF001F3F);
     final Color blue = const Color(0xFF005792);
-    final Color teal = const Color(0xFF00B894);
-    final Color subtitleColor = blue.withOpacity(0.7);
 
     return Scaffold(
       backgroundColor: Colors.white,

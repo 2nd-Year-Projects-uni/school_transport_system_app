@@ -21,7 +21,6 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   static const Color navy = Color(0xFF001F3F);
-  static const Color blue = Color(0xFF005792);
   static const Color teal = Color(0xFF00B894);
 
   int _currentIndex = 0;

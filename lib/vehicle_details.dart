@@ -30,7 +30,6 @@ class _VehicleDetailsPageState extends State<VehicleDetailsPage> {
   static const Color blue = Color(0xFF005792);
 
   bool _linking = false;
-  bool _loadingDriverPhones = false;
   Map<String, String> _driverPhonesByUid = {};
   Map<String, String> _driverPhonesByName = {};
 
@@ -70,7 +69,6 @@ class _VehicleDetailsPageState extends State<VehicleDetailsPage> {
         .toSet()
         .toList();
 
-    setState(() => _loadingDriverPhones = true);
     try {
       final resolvedByUid = <String, String>{};
       final resolvedByName = <String, String>{};
@@ -120,8 +118,6 @@ class _VehicleDetailsPageState extends State<VehicleDetailsPage> {
       });
     } catch (_) {
       // Fallback to any phone values included in vehicle data.
-    } finally {
-      if (mounted) setState(() => _loadingDriverPhones = false);
     }
   }
 

@@ -198,7 +198,7 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
                   itemCount: docs.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
-                    final vehicle = docs[index].data() as Map<String, dynamic>;
+                    final vehicle = docs[index].data();
                     vehicle['id'] = docs[index].id;
                     final String vehicleType =
                         vehicle['vehicleType'] as String? ?? 'Vehicle';

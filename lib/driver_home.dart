@@ -22,6 +22,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
   bool _isLeaving = false;
   bool _isOpeningJourney = false;
   bool _isJourneyActive = false;
+  String _journeyMode = 'morning';
 
   String _placeName(dynamic place) {
     if (place is String) {
@@ -66,9 +67,26 @@ class _DriverHomePageState extends State<DriverHomePage> {
     return points;
   }
 
+  _JourneyPoint? _extractStartingLocationPoint(Map<String, dynamic> data) {
+    final startingLocation = data['startingLocation'];
+    if (startingLocation is! Map) return null;
+
+    final lat = (startingLocation['latitude'] as num?)?.toDouble();
+    final lng = (startingLocation['longitude'] as num?)?.toDouble();
+    if (lat == null || lng == null) return null;
+
+    final name = _placeName(startingLocation);
+    return _JourneyPoint(
+      latitude: lat,
+      longitude: lng,
+      label: name.isNotEmpty ? name : 'Starting location',
+    );
+  }
+
   _JourneyPlan? _resolveJourneyPlan() {
     final data = _currentVehicleData;
     if (data == null) return null;
+    final startingPoint = _extractStartingLocationPoint(data);
 
     final schools = _extractJourneyPoints(data['schools'], 'School');
     final routePoints = _extractJourneyPoints(
@@ -90,31 +108,58 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
       final waypoints = [...checkpointWaypoints, ...schoolWaypoints];
 
-      return _JourneyPlan(destination: destination, waypoints: waypoints);
+      final morningPlan = _JourneyPlan(
+        destination: destination,
+        waypoints: waypoints,
+      );
+
+      if (_journeyMode != 'afternoon') {
+        return morningPlan;
+      }
+
+      return _buildReversedPlan(morningPlan, endingPoint: startingPoint);
     }
 
     if (routePoints.isNotEmpty) {
-      return _JourneyPlan(destination: routePoints.first, waypoints: const []);
+      final morningPlan = _JourneyPlan(
+        destination: routePoints.first,
+        waypoints: const [],
+      );
+      if (_journeyMode != 'afternoon') {
+        return morningPlan;
+      }
+      return _buildReversedPlan(morningPlan, endingPoint: startingPoint);
     }
 
-    final startingLocation = data['startingLocation'];
-    if (startingLocation is Map) {
-      final lat = (startingLocation['latitude'] as num?)?.toDouble();
-      final lng = (startingLocation['longitude'] as num?)?.toDouble();
-      if (lat != null && lng != null) {
-        final name = _placeName(startingLocation);
-        return _JourneyPlan(
-          destination: _JourneyPoint(
-            latitude: lat,
-            longitude: lng,
-            label: name.isNotEmpty ? name : 'Starting location',
-          ),
-          waypoints: const [],
-        );
-      }
+    if (startingPoint != null) {
+      return _JourneyPlan(destination: startingPoint, waypoints: const []);
     }
 
     return null;
+  }
+
+  _JourneyPlan _buildReversedPlan(
+    _JourneyPlan morningPlan, {
+    _JourneyPoint? endingPoint,
+  }) {
+    final sequence = <_JourneyWaypoint>[
+      _JourneyWaypoint(point: morningPlan.destination, isCheckpoint: false),
+      ...morningPlan.waypoints.reversed,
+    ];
+
+    if (endingPoint == null && sequence.length <= 1) {
+      return morningPlan;
+    }
+
+    final reversedDestination = endingPoint ?? sequence.last.point;
+    final reversedWaypoints = endingPoint == null
+        ? sequence.take(sequence.length - 1).toList()
+        : sequence;
+
+    return _JourneyPlan(
+      destination: reversedDestination,
+      waypoints: reversedWaypoints,
+    );
   }
 
   Future<void> _startJourneyInGoogleMaps() async {
@@ -141,7 +186,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
               'latitude': waypoint.point.latitude,
               'longitude': waypoint.point.longitude,
               'label': waypoint.point.label,
-              'type': waypoint.isCheckpoint ? 'checkpoint' : 'school_stop',
+              'type': waypoint.isCheckpoint
+                  ? 'checkpoint'
+                  : (_journeyMode == 'afternoon' ? 'home_stop' : 'school_stop'),
             },
           ),
           {
@@ -156,6 +203,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
           vehicleId: vehicleId,
           metadata: {
             'journeyStatus': 'in_progress',
+            'journeyMode': _journeyMode,
+            'routeOrderVersion': 'mode_ordered_v1',
             'startedAt': ServerValue.timestamp,
             'destination': {
               'latitude': plan.destination.latitude,
@@ -459,6 +508,201 @@ class _DriverHomePageState extends State<DriverHomePage> {
         context,
       ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
     }
+  }
+
+  void _onQuickActionTap(String label) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$label section coming soon.')));
+  }
+
+  Widget _buildQuickActionTile({
+    required IconData icon,
+    required String label,
+    required Color accent,
+    required VoidCallback onTap,
+  }) {
+    final unifiedAccent = blue;
+
+    return Expanded(
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: unifiedAccent.withOpacity(0.28)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0x14001F3F),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: unifiedAccent.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: unifiedAccent, size: 20),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF001F3F),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildJourneyModeSelector() {
+    final isMorning = _journeyMode == 'morning';
+
+    Widget modePill({
+      required String id,
+      required String title,
+      required String subtitle,
+      required IconData icon,
+    }) {
+      final selected = _journeyMode == id;
+
+      return Expanded(
+        child: InkWell(
+          onTap: () => setState(() => _journeyMode = id),
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? const Color(0x1500B894) : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected
+                    ? const Color(0x6600B894)
+                    : const Color(0x26001F3F),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? const Color(0x1F00B894)
+                        : const Color(0x10005792),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 16, color: selected ? teal : blue),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: navy,
+                          fontSize: 12,
+                          fontWeight: selected
+                              ? FontWeight.w800
+                              : FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: navy.withOpacity(0.62),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0x26005792)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.route_rounded, size: 16, color: blue),
+              const SizedBox(width: 6),
+              const Text(
+                'Journey Mode',
+                style: TextStyle(
+                  color: Color(0xFF001F3F),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                isMorning ? 'Morning' : 'Afternoon',
+                style: TextStyle(
+                  color: teal,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              modePill(
+                id: 'morning',
+                title: 'Morning',
+                subtitle: 'Homes -> Schools',
+                icon: Icons.wb_sunny_outlined,
+              ),
+              const SizedBox(width: 10),
+              modePill(
+                id: 'afternoon',
+                title: 'Afternoon',
+                subtitle: 'Schools -> Homes',
+                icon: Icons.nights_stay_outlined,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1487,6 +1731,49 @@ class _DriverHomePageState extends State<DriverHomePage> {
                       ),
                     ),
             ),
+            if (_currentVehicleId != null && _currentVehicleData != null)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPagePadding,
+                  12,
+                  horizontalPagePadding,
+                  0,
+                ),
+                child: Row(
+                  children: [
+                    _buildQuickActionTile(
+                      icon: Icons.groups_rounded,
+                      label: 'Students',
+                      accent: blue,
+                      onTap: () => _onQuickActionTap('Students'),
+                    ),
+                    const SizedBox(width: 10),
+                    _buildQuickActionTile(
+                      icon: Icons.campaign_rounded,
+                      label: 'Notices',
+                      accent: blue,
+                      onTap: () => _onQuickActionTap('Notices'),
+                    ),
+                    const SizedBox(width: 10),
+                    _buildQuickActionTile(
+                      icon: Icons.payments_rounded,
+                      label: 'Payments',
+                      accent: blue,
+                      onTap: () => _onQuickActionTap('Payments'),
+                    ),
+                  ],
+                ),
+              ),
+            if (_currentVehicleId != null && _currentVehicleData != null)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPagePadding,
+                  10,
+                  horizontalPagePadding,
+                  0,
+                ),
+                child: _buildJourneyModeSelector(),
+              ),
             const SizedBox(height: 24),
           ],
         ),

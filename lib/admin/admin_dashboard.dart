@@ -821,7 +821,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
                             Expanded(
                               child: _buildImageCard(
                                 title: "Front Side",
-                                imageUrl: data['licenseFrontUrladde'],
+                                imageUrl: data['licenseFrontUrl'],
                               ),
                             ),
                             const SizedBox(width: 12),

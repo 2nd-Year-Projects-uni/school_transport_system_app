@@ -515,7 +515,7 @@ class VerifyDriversPage extends StatelessWidget {
 }
 
 ///////////////////////////////////////////////////////////////
-/// DRIVER DETAILS PAGE - WITH IMAGES
+/// DRIVER DETAILS PAGE - WITH IMAGES ABOVE BUTTONS
 ///////////////////////////////////////////////////////////////
 class DriverDetailsPage extends StatefulWidget {
   final QueryDocumentSnapshot<Object?> doc;
@@ -809,8 +809,8 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
 
                   const SizedBox(height: 20),
 
-                  // License Images Section
-                  if (data['License FrontURL'] != null || data['License BackURL'] != null)
+                  // License Images Section - Now positioned above the buttons
+                  if (data['licenseFrontUrl'] != null || data['licenseBackUrl'] != null)
                     _buildSection(
                       title: "License Documents",
                       icon: Icons.description_outlined,
@@ -821,17 +821,28 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
                             Expanded(
                               child: _buildImageCard(
                                 title: "Front Side",
-                                imageUrl: data['License FrontURL'],
+                                imageUrl: data['licenseFrontUrladde'],
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: _buildImageCard(
                                 title: "Back Side",
-                                imageUrl: data['License BackURL'],
+                                imageUrl: data['licenseBackUrl'],
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 8),
+                        Center(
+                          child: Text(
+                            'Tap images to enlarge',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[500],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -987,91 +998,205 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
   }
 
   Widget _buildImageCard({required String title, required String? imageUrl}) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Column(
-        children: [
-          Container(
-            height: 120,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
+    return GestureDetector(
+      onTap: () {
+        if (imageUrl != null && imageUrl.isNotEmpty) {
+          _showImageDialog(context, imageUrl, title);
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Column(
+          children: [
+            Container(
+              height: 150,
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
               ),
-            ),
-            child: imageUrl != null && imageUrl.isNotEmpty
-                ? ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(12),
-                    ),
-                    child: Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.broken_image, size: 40, color: Colors.grey[400]),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Failed to load',
-                              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                            ),
-                          ],
-                        );
-                      },
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                            color: AppColors.primary,
-                          ),
-                        );
-                      },
-                    ),
-                  )
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.image_not_supported_outlined,
-                          size: 40, color: Colors.grey[400]),
-                      const SizedBox(height: 8),
-                      Text(
-                        'No image',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              child: imageUrl != null && imageUrl.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(12),
                       ),
-                    ],
-                  ),
-          ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(12),
+                      child: Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.broken_image, size: 40, color: Colors.grey[400]),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Failed to load',
+                                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                              ),
+                            ],
+                          );
+                        },
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                              color: AppColors.primary,
+                            ),
+                          );
+                        },
+                      ),
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.image_not_supported_outlined,
+                            size: 40, color: Colors.grey[400]),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No image',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                        ),
+                      ],
+                    ),
+            ),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(12),
+                ),
+              ),
+              child: Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
-            child: Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+
+  void _showImageDialog(BuildContext context, String imageUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(20),
+          child: Stack(
+            children: [
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      height: MediaQuery.of(context).size.height * 0.6,
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(16),
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(16),
+                        ),
+                        child: Image.network(
+                          imageUrl,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.broken_image, size: 64, color: Colors.grey[400]),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Failed to load image',
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                        loadingProgress.expectedTotalBytes!
+                                    : null,
+                                color: AppColors.primary,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(
+                          bottom: Radius.circular(16),
+                        ),
+                      ),
+                      child: Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 10,
+                right: 10,
+                child: IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, color: AppColors.textPrimary),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

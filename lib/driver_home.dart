@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'services/location_service.dart';
 
@@ -20,6 +21,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
   bool _isJoinVehicleExpanded = false;
   bool _isLeaving = false;
   bool _isOpeningJourney = false;
+  bool _isJourneyActive = false;
 
   String _placeName(dynamic place) {
     if (place is String) {
@@ -116,7 +118,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
   }
 
   Future<void> _startJourneyInGoogleMaps() async {
-    if (_isOpeningJourney) return;
+    if (_isOpeningJourney || _isJourneyActive) return;
 
     final plan = _resolveJourneyPlan();
     if (plan == null) {
@@ -131,6 +133,46 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
     setState(() => _isOpeningJourney = true);
     try {
+      final vehicleId = _currentVehicleId;
+      if (vehicleId != null && vehicleId.isNotEmpty) {
+        final routeSnapshot = <Map<String, dynamic>>[
+          ...plan.waypoints.map(
+            (waypoint) => {
+              'latitude': waypoint.point.latitude,
+              'longitude': waypoint.point.longitude,
+              'label': waypoint.point.label,
+              'type': waypoint.isCheckpoint ? 'checkpoint' : 'school_stop',
+            },
+          ),
+          {
+            'latitude': plan.destination.latitude,
+            'longitude': plan.destination.longitude,
+            'label': plan.destination.label,
+            'type': 'destination',
+          },
+        ];
+
+        await _locationService.publishJourneyMetadata(
+          vehicleId: vehicleId,
+          metadata: {
+            'journeyStatus': 'in_progress',
+            'startedAt': ServerValue.timestamp,
+            'destination': {
+              'latitude': plan.destination.latitude,
+              'longitude': plan.destination.longitude,
+              'label': plan.destination.label,
+            },
+            'routeSnapshot': routeSnapshot,
+            'vehicleRegisterNumber':
+                _currentVehicleData?['registerNumber']?.toString() ?? '',
+            'vehicleCode': _currentVehicleData?['code']?.toString() ?? '',
+          },
+        );
+        if (mounted) {
+          setState(() => _isJourneyActive = true);
+        }
+      }
+
       final destinationLat = plan.destination.latitude.toStringAsFixed(6);
       final destinationLng = plan.destination.longitude.toStringAsFixed(6);
 
@@ -172,6 +214,29 @@ class _DriverHomePageState extends State<DriverHomePage> {
     }
   }
 
+  Future<void> _stopJourney() async {
+    if (_isOpeningJourney || !_isJourneyActive) return;
+
+    setState(() => _isOpeningJourney = true);
+    try {
+      await _locationService.markJourneyEnded();
+      if (!mounted) return;
+      setState(() => _isJourneyActive = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Journey stopped. Live tracking paused.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not stop journey. Try again.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isOpeningJourney = false);
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -198,6 +263,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
         .collection('users')
         .doc(user.uid)
         .get();
+    final driverName = userDoc.data()?['name'] as String?;
     final vehicleId = userDoc.data()?['vehicleId'] as String?;
     if (vehicleId != null && vehicleId.isNotEmpty) {
       final vehicleDoc = await FirebaseFirestore.instance
@@ -205,26 +271,45 @@ class _DriverHomePageState extends State<DriverHomePage> {
           .doc(vehicleId)
           .get();
       if (vehicleDoc.exists) {
+        final inProgress = await _locationService.isJourneyInProgress(
+          vehicleId,
+        );
+        _locationService.setActiveVehicle(
+          vehicleId: vehicleId,
+          driverName: driverName,
+        );
+        if (!mounted) return;
         setState(() {
           _currentVehicleId = vehicleId;
           _currentVehicleData = vehicleDoc.data();
           _isAssignedVehicleExpanded = false;
           _isJoinVehicleExpanded = false;
+          _isJourneyActive = inProgress;
         });
       } else {
+        _locationService.setActiveVehicle(
+          vehicleId: null,
+          driverName: driverName,
+        );
         setState(() {
           _currentVehicleId = null;
           _currentVehicleData = null;
           _isAssignedVehicleExpanded = false;
           _isJoinVehicleExpanded = false;
+          _isJourneyActive = false;
         });
       }
     } else {
+      _locationService.setActiveVehicle(
+        vehicleId: null,
+        driverName: driverName,
+      );
       setState(() {
         _currentVehicleId = null;
         _currentVehicleData = null;
         _isAssignedVehicleExpanded = false;
         _isJoinVehicleExpanded = false;
+        _isJourneyActive = false;
       });
     }
   }
@@ -256,12 +341,15 @@ class _DriverHomePageState extends State<DriverHomePage> {
         'vehicleId': null,
       });
       await batch.commit();
+      await _locationService.markJourneyEnded();
+      _locationService.setActiveVehicle(vehicleId: null);
 
       setState(() {
         _currentVehicleId = null;
         _currentVehicleData = null;
         _isAssignedVehicleExpanded = false;
         _isJoinVehicleExpanded = false;
+        _isJourneyActive = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You have left the vehicle.')),
@@ -357,6 +445,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
       await FirebaseFirestore.instance.collection('users').doc(uid).update({
         'vehicleId': vehicleId,
       });
+      _locationService.setActiveVehicle(vehicleId: vehicleId, driverName: name);
+      if (mounted) {
+        setState(() => _isJourneyActive = false);
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Successfully joined the vehicle!')),
       );
@@ -1407,22 +1499,29 @@ class _DriverHomePageState extends State<DriverHomePage> {
             height: 56,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF00355F), Color(0xFF005792)],
+                gradient: LinearGradient(
+                  colors: _isJourneyActive
+                      ? const [Color(0xFF9D0208), Color(0xFFD00000)]
+                      : const [Color(0xFF00355F), Color(0xFF005792)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: navy.withOpacity(0.22),
+                    color: (_isJourneyActive ? const Color(0xFFD00000) : navy)
+                        .withOpacity(0.22),
                     blurRadius: 16,
                     offset: const Offset(0, 8),
                   ),
                 ],
               ),
               child: ElevatedButton.icon(
-                onPressed: _isOpeningJourney ? null : _startJourneyInGoogleMaps,
+                onPressed: _isOpeningJourney
+                    ? null
+                    : _isJourneyActive
+                    ? () => _stopJourney()
+                    : _startJourneyInGoogleMaps,
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
                   backgroundColor: Colors.transparent,
@@ -1441,10 +1540,15 @@ class _DriverHomePageState extends State<DriverHomePage> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.navigation_rounded, color: Colors.white),
-                label: const Text(
-                  'Start Journey',
-                  style: TextStyle(
+                    : Icon(
+                        _isJourneyActive
+                            ? Icons.stop_circle_outlined
+                            : Icons.navigation_rounded,
+                        color: Colors.white,
+                      ),
+                label: Text(
+                  _isJourneyActive ? 'Stop Journey' : 'Start Journey',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,

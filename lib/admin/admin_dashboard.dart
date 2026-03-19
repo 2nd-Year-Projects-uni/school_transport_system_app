@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'admin_login.dart';
 import 'driver_records.dart';
+import 'vehicle_menu.dart';
 
 ///////////////////////////////////////////////////////////////
 /// COLOR SYSTEM
@@ -96,11 +97,9 @@ class AdminDashboardPage extends StatelessWidget {
                 icon: Icons.directions_bus_outlined,
                 color: AppColors.info,
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Vehicle Management Coming Soon'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const VehicleMenuPage()),
                   );
                 },
               ),

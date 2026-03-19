@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'admin_login.dart';
+import 'driver_records.dart';
 
 ///////////////////////////////////////////////////////////////
 /// COLOR SYSTEM
@@ -200,7 +201,7 @@ class DriverMenuPage extends StatelessWidget {
               Icons.list_alt,
               () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const DriverListPage()),
+                MaterialPageRoute(builder: (_) => const DriverRecordsPage()),
               ),
             ),
           ],

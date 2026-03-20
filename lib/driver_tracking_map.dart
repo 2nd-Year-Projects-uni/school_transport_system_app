@@ -1468,7 +1468,7 @@ class _DriverTrackingMapPageState extends State<DriverTrackingMapPage> {
     required List<_JourneyStop> journeyStops,
     required LatLng? pickupLocation,
   }) {
-    final busRotation = driverHeading * math.pi / 180;
+    final busRotation = 0.0;
     final routeMidpoint = _routeMidpoint();
     final bubbleText = _routeBubbleText();
 

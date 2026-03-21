@@ -140,28 +140,7 @@ class _FirstWelcomeContent extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             Container(color: Colors.white),
-            Positioned.fill(
-              child: Image.asset(
-                _WelcomePageState.firstWelcomeImagePath,
-                fit: BoxFit.cover,
-                alignment: Alignment.topCenter,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: const Color(0xFFEFF6FF),
-                    alignment: Alignment.center,
-                    child: Text(
-                      'Image not found:\n${_WelcomePageState.firstWelcomeImagePath}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: _WelcomePageState.navy.withValues(alpha: 0.7),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
+            // Title at the top
             Positioned(
               left: 0,
               right: 0,
@@ -182,6 +161,41 @@ class _FirstWelcomeContent extends StatelessWidget {
                       ),
                     ],
                   ),
+                ),
+              ),
+            ),
+            // Image at the bottom
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  left: 24,
+                  right: 12,
+                  bottom: 24,
+                  top: 24,
+                ),
+                child: Image.asset(
+                  _WelcomePageState.firstWelcomeImagePath,
+                  fit: BoxFit.fitWidth,
+                  alignment: Alignment.bottomCenter,
+                  filterQuality: FilterQuality.high,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: const Color(0xFFEFF6FF),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Image not found:\n${_WelcomePageState.firstWelcomeImagePath}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _WelcomePageState.navy.withValues(alpha: 0.7),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),

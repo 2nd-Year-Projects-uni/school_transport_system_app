@@ -45,26 +45,38 @@ class WelcomeActionContent extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             Container(color: Colors.white),
-            Positioned.fill(
-              child: Image.asset(
-                secondWelcomeImagePath,
-                fit: BoxFit.cover,
-                alignment: Alignment.topCenter,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: const Color(0xFFEFF6FF),
-                    alignment: Alignment.center,
-                    child: Text(
-                      'Image not found:\n$secondWelcomeImagePath',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: navy.withValues(alpha: 0.7),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+            // Card and text at the top (existing content remains)
+            // Image at the bottom
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 24,
+                ),
+                child: Image.asset(
+                  secondWelcomeImagePath,
+                  fit: BoxFit.fitWidth,
+                  alignment: Alignment.bottomCenter,
+                  filterQuality: FilterQuality.high,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: const Color(0xFFEFF6FF),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Image not found:\n$secondWelcomeImagePath',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: navy.withValues(alpha: 0.7),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
             Positioned(

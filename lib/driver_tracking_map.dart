@@ -1584,9 +1584,15 @@ class _DriverTrackingMapPageState extends State<DriverTrackingMapPage> {
     List<_JourneyStop> stops,
   ) {
     if (_activeRoutePolyline.length >= 2) {
+      final completeRoute = <LatLng>[
+        currentLocation,
+        ..._activeRoutePolyline,
+        if (stops.isNotEmpty) stops.last.point,
+      ];
+
       return [
         Polyline(
-          points: _activeRoutePolyline,
+          points: completeRoute,
           strokeWidth: 4.8,
           color: const Color(0xFF121212),
         ),

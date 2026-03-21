@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 class AttendanceTab extends StatefulWidget {
   final String childId;
@@ -54,6 +55,8 @@ class _AttendanceTabState extends State<AttendanceTab> {
   Map<String, Map<String, bool>> _overrides = <String, Map<String, bool>>{};
 
   bool _loading = true;
+  bool _showCalendar = false;
+  DateTime _focusedDay = DateTime.now();
 
   @override
   void initState() {
@@ -176,15 +179,15 @@ class _AttendanceTabState extends State<AttendanceTab> {
   }
 
   String _statusLabel(bool morning, bool afternoon) {
-    if (morning && afternoon) return 'Coming';
-    if (!morning && !afternoon) return 'Not coming';
+    if (morning && afternoon) return 'Present';
+    if (!morning && !afternoon) return 'Absent';
     return 'Partial';
   }
 
   Color _statusColor(bool morning, bool afternoon) {
     if (morning && afternoon) return teal;
     if (!morning && !afternoon) return Colors.red;
-    return Colors.orange;
+    return blue;
   }
 
   String _formatDate(DateTime date) {
@@ -284,11 +287,11 @@ class _AttendanceTabState extends State<AttendanceTab> {
     bool enabled = true,
   }) {
     final activeColor = attending
-        ? const Color(0xFF0A8E72)
-        : const Color(0xFF8A4D53);
+        ? teal
+        : Colors.red;
     final background = attending
-        ? const Color(0x0D00B894)
-        : const Color(0x0DE67D89);
+        ? teal.withValues(alpha: 0.1)
+        : Colors.red.withValues(alpha: 0.1);
 
     return InkWell(
       onTap: enabled ? onTap : null,
@@ -316,7 +319,7 @@ class _AttendanceTabState extends State<AttendanceTab> {
             ),
             const SizedBox(width: 6),
             Text(
-              '$label · ${attending ? 'On' : 'Off'}',
+              '$label · ${attending ? 'Yes' : 'No'}',
               style: TextStyle(
                 color: enabled ? activeColor : const Color(0xFF9BA7B5),
                 fontSize: 10.5,
@@ -330,14 +333,26 @@ class _AttendanceTabState extends State<AttendanceTab> {
   }
 
   Widget _buildWeekTab() {
-    final today = _dateOnly(DateTime.now());
-    final monday = _weekStartMonday(today);
+    final today = _dateOnly(_focusedDay);
+    var monday = _weekStartMonday(today);
+    
+    // If today is Saturday or Sunday, show the next week
+    if (today.weekday == DateTime.saturday || today.weekday == DateTime.sunday) {
+      monday = monday.add(const Duration(days: 7));
+    }
+
     final weekDates = List.generate(5, (i) => monday.add(Duration(days: i)));
 
     var fullDays = 0;
     var absentDays = 0;
     var partialDays = 0;
-    for (final date in weekDates) {
+    
+    // Calculate stats for the entire month (weekdays only)
+    final daysInMonth = DateTime(_focusedDay.year, _focusedDay.month + 1, 0).day;
+    for (var i = 1; i <= daysInMonth; i++) {
+      final date = DateTime(_focusedDay.year, _focusedDay.month, i);
+      if (date.weekday == DateTime.saturday || date.weekday == DateTime.sunday) continue;
+
       final slots = _effectiveSlotsForDate(date);
       final morning = slots['morning'] ?? true;
       final afternoon = slots['afternoon'] ?? true;
@@ -378,29 +393,78 @@ class _AttendanceTabState extends State<AttendanceTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Weekly Attendance Planner',
-                  style: TextStyle(
-                    color: navy,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Monthly Planner',
+                      style: TextStyle(
+                        color: navy,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(_showCalendar ? Icons.keyboard_arrow_up : Icons.calendar_month, color: navy),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => setState(() => _showCalendar = !_showCalendar),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  '${widget.childName} • Mon to Fri',
-                  style: TextStyle(
-                    color: navy.withValues(alpha: 0.72),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                if (_showCalendar)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10.0, bottom: 2.0),
+                    child: TableCalendar(
+                      firstDay: DateTime.utc(2023, 1, 1),
+                      lastDay: DateTime.utc(2030, 12, 31),
+                      focusedDay: _focusedDay,
+                      selectedDayPredicate: (day) => isSameDay(_focusedDay, day),
+                      onDaySelected: (selectedDay, focusedDay) {
+                        setState(() {
+                          _focusedDay = focusedDay;
+                          _showCalendar = false;
+                        });
+                      },
+                      calendarFormat: CalendarFormat.month,
+                      availableCalendarFormats: const { CalendarFormat.month: 'Month' },
+                      headerStyle: const HeaderStyle(
+                        formatButtonVisible: false,
+                        titleCentered: true,
+                        titleTextStyle: TextStyle(color: navy, fontWeight: FontWeight.bold, fontSize: 13),
+                        leftChevronIcon: Icon(Icons.chevron_left, color: navy, size: 20),
+                        rightChevronIcon: Icon(Icons.chevron_right, color: navy, size: 20),
+                      ),
+                      daysOfWeekStyle: const DaysOfWeekStyle(
+                        weekdayStyle: TextStyle(color: navy, fontSize: 11, fontWeight: FontWeight.bold),
+                        weekendStyle: TextStyle(color: blue, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                      calendarStyle: CalendarStyle(
+                        todayDecoration: BoxDecoration(color: blue.withValues(alpha: 0.5), shape: BoxShape.circle),
+                        selectedDecoration: const BoxDecoration(color: teal, shape: BoxShape.circle),
+                        defaultTextStyle: const TextStyle(color: navy, fontSize: 12),
+                        weekendTextStyle: const TextStyle(color: blue, fontSize: 12),
+                        outsideDaysVisible: false,
+                        cellMargin: const EdgeInsets.all(4),
+                      ),
+                    ),
                   ),
-                ),
+                if (!_showCalendar) const SizedBox(height: 6),
+                if (!_showCalendar)
+                  Text(
+                    '${widget.childName} • ${_monthNames[_focusedDay.month - 1]} ${_focusedDay.year}',
+                    style: TextStyle(
+                      color: navy.withValues(alpha: 0.72),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 const SizedBox(height: 14),
                 Row(
                   children: [
                     Expanded(
                       child: _buildSummaryChip(
-                        label: 'Coming',
+                        label: 'Present',
                         value: '$fullDays',
                         color: teal,
                       ),
@@ -549,13 +613,13 @@ class _AttendanceTabState extends State<AttendanceTab> {
                                     vertical: 3,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: const Color(0x0F005792),
+                                    color: navy.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
-                                    'Manual',
+                                    'Edited',
                                     style: TextStyle(
-                                      color: blue.withValues(alpha: 0.88),
+                                      color: navy,
                                       fontSize: 10,
                                       fontWeight: FontWeight.w800,
                                     ),

@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'vehicle_details.dart';
+import 'child_settings.dart';
 
 class FilteredVansPage extends StatefulWidget {
   final String childId;
@@ -1474,6 +1475,21 @@ class _FilteredVansPageState extends State<FilteredVansPage>
           ),
         ),
         actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChildSettingsPage(
+                    childId: widget.childId,
+                    childName: widget.childName,
+                  ),
+                ),
+              ).then((_) => _loadAndFilter());
+            },
+            tooltip: 'Child Settings',
+            icon: const Icon(Icons.settings_rounded, color: Colors.white),
+          ),
           IconButton(
             onPressed: _loadAndFilter,
             tooltip: 'Refresh vehicles',

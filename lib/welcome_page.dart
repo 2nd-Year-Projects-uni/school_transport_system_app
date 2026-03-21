@@ -107,15 +107,12 @@ class _ProgressDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double width = 18 + (30 - 18) * progress;
-    final Color color =
-        Color.lerp(const Color(0x33001F3F), _WelcomePageState.navy, progress) ??
-        _WelcomePageState.navy;
 
     return Container(
       width: width,
       height: 8.5,
       decoration: BoxDecoration(
-        color: color,
+        color: _WelcomePageState.navy,
         borderRadius: BorderRadius.circular(999),
       ),
     );

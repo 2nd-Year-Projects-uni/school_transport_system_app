@@ -36,7 +36,15 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     _pages = [
-      HomeTab(childId: widget.childId, childName: widget.childName),
+      HomeTab(
+        childId: widget.childId, 
+        childName: widget.childName,
+        onNavigateToMap: () {
+          setState(() {
+            _currentIndex = 1;
+          });
+        },
+      ),
       MapTab(childId: widget.childId, childName: widget.childName),
       AttendanceTab(childId: widget.childId, childName: widget.childName),
       NoticesTab(childId: widget.childId, childName: widget.childName),

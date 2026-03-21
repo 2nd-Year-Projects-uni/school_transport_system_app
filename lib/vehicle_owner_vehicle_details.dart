@@ -750,15 +750,19 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
                                       return Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Text(
-                                            'Code: $code',
-                                            style: TextStyle(
-                                              color: _detailsNavy,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w700,
-                                              letterSpacing: 1.2,
+                                          Flexible(
+                                            child: Text(
+                                              'Code: $code',
+                                              style: TextStyle(
+                                                color: _detailsNavy,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                                letterSpacing: 1.2,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
+                                          const SizedBox(width: 6),
                                           IconButton(
                                             icon: Icon(
                                               Icons.copy,

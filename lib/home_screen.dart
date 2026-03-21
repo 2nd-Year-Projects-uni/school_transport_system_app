@@ -422,8 +422,8 @@ class _SelectChildPageState extends State<SelectChildPage> {
                                               const SizedBox(width: 6),
                                               Text(
                                                 hasVan
-                                                    ? 'Linked to a van'
-                                                    : 'Not linked to a van',
+                                                    ? 'Linked to a vehicle'
+                                                    : 'Not linked to a vehicle',
                                                 style: TextStyle(
                                                   color: hasVan
                                                       ? teal

@@ -24,6 +24,7 @@ class _AddChildPageState extends State<AddChildPage> {
   bool _fetchingCurrentLocation = false;
   bool _resolvingPickupPlace = false;
   LatLng? selectedLocation;
+  String? _selectedSchool;
   GoogleMapController? mapController;
 
   final String parentId = FirebaseAuth.instance.currentUser!.uid;
@@ -278,11 +279,30 @@ class _AddChildPageState extends State<AddChildPage> {
   }
 
   void _onSchoolChanged(String value) {
+    if (mounted) {
+      setState(() {
+        _selectedSchool = null;
+        if (value.trim().isEmpty) {
+          _schoolSuggestions = [];
+        }
+      });
+    }
+
     _schoolSearchTimer?.cancel();
+    if (value.trim().isEmpty) return;
+
     _schoolSearchTimer = Timer(const Duration(milliseconds: 350), () async {
       final suggestions = await _fetchSchoolSuggestions(value);
       if (!mounted) return;
       setState(() => _schoolSuggestions = suggestions);
+    });
+  }
+
+  void _clearSchoolInput() {
+    setState(() {
+      schoolController.clear();
+      _selectedSchool = null;
+      _schoolSuggestions = [];
     });
   }
 
@@ -439,10 +459,17 @@ class _AddChildPageState extends State<AddChildPage> {
   }
 
   Future<void> saveStudent() async {
-    if (nameController.text.isEmpty || schoolController.text.isEmpty) {
+    if (nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("Please fill all fields")));
+      ).showSnackBar(const SnackBar(content: Text("Please enter a child name")));
+      return;
+    }
+
+    if (_selectedSchool == null || _selectedSchool != schoolController.text.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a valid school from the dropdown suggestions")),
+      );
       return;
     }
 
@@ -575,7 +602,14 @@ class _AddChildPageState extends State<AddChildPage> {
               children: [
                 TextField(
                   controller: schoolController,
-                  decoration: _inputDecoration('School', Icons.school_outlined),
+                  decoration: _inputDecoration('School', Icons.school_outlined).copyWith(
+                    suffixIcon: schoolController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close, color: Colors.grey),
+                            onPressed: _clearSchoolInput,
+                          )
+                        : null,
+                  ),
                   onChanged: _onSchoolChanged,
                 ),
                 if (_schoolSuggestions.isNotEmpty)
@@ -614,6 +648,7 @@ class _AddChildPageState extends State<AddChildPage> {
                           ),
                           onTap: () {
                             setState(() {
+                              _selectedSchool = suggestion.description;
                               schoolController.text = suggestion.description;
                               _schoolSuggestions = [];
                             });

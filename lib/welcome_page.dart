@@ -13,6 +13,8 @@ class _WelcomePageState extends State<WelcomePage> {
   late final PageController _pageController;
 
   static const Color navy = Color(0xFF001F3F);
+  static const Color lightNavy = Color(0xFF2C4F78);
+  static const Color lighterNavy = Color(0xFF3F648E);
   static const Color blue = Color(0xFF005792);
   static const Color teal = Color(0xFF00B894);
   static const String firstWelcomeImagePath =
@@ -85,14 +87,18 @@ class _SwipeIndicators extends StatelessWidget {
         final double page = controller.hasClients
             ? (controller.page ?? controller.initialPage.toDouble())
             : controller.initialPage.toDouble();
+        final double fade = (1 - page).clamp(0.0, 1.0);
 
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _ProgressDot(progress: (1 - (page - 0).abs()).clamp(0.0, 1.0)),
-            const SizedBox(width: 8),
-            _ProgressDot(progress: (1 - (page - 1).abs()).clamp(0.0, 1.0)),
-          ],
+        return Opacity(
+          opacity: fade,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ProgressDot(progress: (1 - (page - 0).abs()).clamp(0.0, 1.0)),
+              const SizedBox(width: 8),
+              _ProgressDot(progress: (1 - (page - 1).abs()).clamp(0.0, 1.0)),
+            ],
+          ),
         );
       },
     );
@@ -112,7 +118,7 @@ class _ProgressDot extends StatelessWidget {
       width: width,
       height: 8.5,
       decoration: BoxDecoration(
-        color: _WelcomePageState.navy,
+        color: _WelcomePageState.lighterNavy,
         borderRadius: BorderRadius.circular(999),
       ),
     );
@@ -124,52 +130,50 @@ class _FirstWelcomeContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Container(color: Colors.white),
-        Positioned.fill(
-          child: Image.asset(
-            _WelcomePageState.firstWelcomeImagePath,
-            fit: BoxFit.cover,
-            alignment: Alignment.topCenter,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                color: const Color(0xFFEFF6FF),
-                alignment: Alignment.center,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double topInset = MediaQuery.of(context).padding.top;
+        final double titleTop = topInset + constraints.maxHeight * 0.12;
+        final double titleSize = constraints.maxWidth < 370 ? 42 : 46;
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(color: Colors.white),
+            Positioned.fill(
+              child: Image.asset(
+                _WelcomePageState.firstWelcomeImagePath,
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: const Color(0xFFEFF6FF),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'Image not found:\n${_WelcomePageState.firstWelcomeImagePath}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _WelcomePageState.navy.withValues(alpha: 0.7),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: titleTop,
+              child: Center(
                 child: Text(
-                  'Image not found:\n${_WelcomePageState.firstWelcomeImagePath}',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: _WelcomePageState.navy.withValues(alpha: 0.7),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        Positioned.fill(
-          child: Align(
-            alignment: const Alignment(0, -0.60),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
                   'Ride Safe',
                   style: TextStyle(
-                    fontSize: 46,
+                    fontSize: titleSize,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.3,
-                    foreground: Paint()
-                      ..shader = const LinearGradient(
-                        colors: [
-                          _WelcomePageState.navy,
-                          _WelcomePageState.blue,
-                          _WelcomePageState.teal,
-                        ],
-                      ).createShader(const Rect.fromLTWH(0, 0, 260, 70)),
+                    color: _WelcomePageState.lightNavy,
                     shadows: [
                       Shadow(
                         color: Colors.white.withValues(alpha: 0.48),
@@ -179,11 +183,11 @@ class _FirstWelcomeContent extends StatelessWidget {
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }

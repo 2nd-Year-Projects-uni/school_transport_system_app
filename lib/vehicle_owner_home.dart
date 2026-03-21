@@ -5,6 +5,7 @@ import 'vehicle_owner_vehicle_details.dart';
 import 'vehicle_registration_page.dart';
 
 final Color navy = const Color(0xFF001F3F);
+final Color lightNavy = const Color(0xFF2C4F78);
 final Color blue = const Color(0xFF005792);
 final Color teal = const Color(0xFF00B894);
 
@@ -33,22 +34,14 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
     with SingleTickerProviderStateMixin {
   final VehicleService _vehicleService = VehicleService();
   late final AnimationController _fabHighlightController;
-  late final Animation<double> _fabScaleAnimation;
-  late final Animation<double> _fabGlowAnimation;
 
   @override
   void initState() {
     super.initState();
     _fabHighlightController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1100),
-    )..repeat(reverse: true);
-    _fabScaleAnimation = Tween<double>(begin: 1, end: 1.08).animate(
-      CurvedAnimation(parent: _fabHighlightController, curve: Curves.easeInOut),
-    );
-    _fabGlowAnimation = Tween<double>(begin: 0.18, end: 0.36).animate(
-      CurvedAnimation(parent: _fabHighlightController, curve: Curves.easeInOut),
-    );
+      duration: const Duration(milliseconds: 2600),
+    )..repeat();
   }
 
   @override
@@ -100,7 +93,11 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
         ],
       ),
       child: Center(
-        child: Icon(_vehicleIconForType(vehicleType), color: navy, size: 30),
+        child: Icon(
+          _vehicleIconForType(vehicleType),
+          color: lightNavy,
+          size: 30,
+        ),
       ),
     );
   }
@@ -212,7 +209,10 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
                     final String normalizedCondition = condition
                         .toLowerCase()
                         .replaceAll(RegExp(r'[^a-z]'), '');
-                    final bool showAcCondition = normalizedCondition == 'ac';
+                    final bool isAcCondition = normalizedCondition == 'ac';
+                    final bool hasKnownCondition =
+                        normalizedCondition == 'ac' ||
+                        normalizedCondition == 'nonac';
                     final bool isApproved = vehicle['status'] as bool? ?? false;
                     final Color statusShadowColor = isApproved
                         ? Colors.green.shade600.withOpacity(0.34)
@@ -260,7 +260,7 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
                                     ),
                                     const SizedBox(height: 10),
                                     _modernVehicleIcon(vehicleType),
-                                    if (showAcCondition) ...[
+                                    if (hasKnownCondition) ...[
                                       const SizedBox(height: 8),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
@@ -268,19 +268,32 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
                                           vertical: 5,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: teal.withOpacity(0.14),
+                                          color: lightNavy.withOpacity(0.14),
                                           borderRadius: BorderRadius.circular(
                                             20,
                                           ),
                                         ),
-                                        child: Text(
-                                          'AC',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            color: teal,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700,
-                                          ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              isAcCondition
+                                                  ? Icons.ac_unit_outlined
+                                                  : Icons.air_outlined,
+                                              size: 14,
+                                              color: lightNavy,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              isAcCondition ? 'AC' : 'Non-AC',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: lightNavy,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ],
@@ -334,49 +347,79 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
           floatingActionButton: AnimatedBuilder(
             animation: _fabHighlightController,
             builder: (context, child) {
-              if (hasVehicles) {
-                return child!;
+              final double phase = _fabHighlightController.value;
+
+              final Widget fab = FloatingActionButton(
+                onPressed: _openVehicleRegistrationPage,
+                tooltip: 'Add Vehicle',
+                backgroundColor: teal,
+                elevation: 0,
+                highlightElevation: 0,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                foregroundColor: Colors.white,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    const Icon(Icons.directions_bus_filled, size: 24),
+                    Positioned(
+                      right: -5,
+                      top: -5,
+                      child: CircleAvatar(
+                        radius: 8,
+                        backgroundColor: Colors.white,
+                        child: Icon(Icons.add, size: 12, color: navy),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+
+              final double ring1T = phase;
+              final double ring2T = (phase + 0.38) % 1.0;
+
+              Widget buildPulseRing(double t, {required double maxOpacity}) {
+                final double scale = 1.0 + (t * 1.1);
+                final double opacity = maxOpacity * (1.0 - t);
+                final double strokeWidth = 2.6 - (t * 1.5);
+
+                return Transform.scale(
+                  scale: scale,
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: teal.withOpacity(opacity),
+                        width: strokeWidth.clamp(1.0, 2.6),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: teal.withOpacity(opacity * 0.35),
+                          blurRadius: 10,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
               }
 
-              return Transform.scale(
-                scale: _fabScaleAnimation.value,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: teal.withOpacity(_fabGlowAnimation.value),
-                        blurRadius: 18,
-                        spreadRadius: 6,
-                      ),
-                    ],
-                  ),
-                  child: child,
+              return SizedBox(
+                width: 90,
+                height: 90,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    buildPulseRing(ring1T, maxOpacity: 0.34),
+                    buildPulseRing(ring2T, maxOpacity: 0.22),
+                    fab,
+                  ],
                 ),
               );
             },
-            child: FloatingActionButton(
-              onPressed: _openVehicleRegistrationPage,
-              tooltip: 'Add Vehicle',
-              backgroundColor: teal,
-              foregroundColor: Colors.white,
-              child: Stack(
-                clipBehavior: Clip.none,
-                alignment: Alignment.center,
-                children: [
-                  const Icon(Icons.directions_bus_filled, size: 24),
-                  Positioned(
-                    right: -5,
-                    top: -5,
-                    child: CircleAvatar(
-                      radius: 8,
-                      backgroundColor: Colors.white,
-                      child: Icon(Icons.add, size: 12, color: navy),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         );
       },

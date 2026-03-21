@@ -1467,12 +1467,9 @@ class _FilteredVansPageState extends State<FilteredVansPage>
         backgroundColor: navy,
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          'Vehicles for ${widget.childName}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+        title: const Text(
+          'Filtered Vehicles',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
@@ -1489,11 +1486,6 @@ class _FilteredVansPageState extends State<FilteredVansPage>
             },
             tooltip: 'Child Settings',
             icon: const Icon(Icons.settings_rounded, color: Colors.white),
-          ),
-          IconButton(
-            onPressed: _loadAndFilter,
-            tooltip: 'Refresh vehicles',
-            icon: const Icon(Icons.refresh, color: Colors.white),
           ),
         ],
       ),

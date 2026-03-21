@@ -150,6 +150,52 @@ class WelcomeActionContent extends StatelessWidget {
             },
           ),
         ),
+        Positioned.fill(
+          child: Align(
+            alignment: const Alignment(0, -0.69),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 340),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.88),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0x22005792)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Built for safer school journeys',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: navy,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Live routing  •  Child safety  •  Instant alerts',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: blue.withValues(alpha: 0.92),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
         Positioned(
           left: 24,
           right: 24,
@@ -159,7 +205,7 @@ class WelcomeActionContent extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () => _showAuthOptions(context),
               style: ElevatedButton.styleFrom(
-                backgroundColor: teal,
+                backgroundColor: navy,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(

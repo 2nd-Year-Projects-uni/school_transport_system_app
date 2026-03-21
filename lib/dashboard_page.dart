@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'attendance_tab.dart';
 import 'd_info_child.dart';
-import 'child_settings.dart';
 import 'c_home_page.dart';
 import 'driver_tracking_map.dart';
 
@@ -45,7 +44,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _onMenuSelected(String value) {
-    if (value == 'driver_info') {
+    if (value == 'vehicle_info') {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -58,16 +57,10 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
-    if (value == 'settings') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ChildSettingsPage(
-            childId: widget.childId,
-            childName: widget.childName,
-          ),
-        ),
-      );
+
+    if (value == 'logout') {
+      // Redirect to root/login upon logging out.
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 
@@ -89,31 +82,43 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ),
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            onSelected: _onMenuSelected,
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'driver_info',
-                child: Row(
-                  children: [
-                    Icon(Icons.person_outline, color: Color(0xFF001F3F)),
-                    SizedBox(width: 10),
-                    Text('Driver Info'),
-                  ],
-                ),
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Color(0x22001F3F)),
               ),
-              PopupMenuItem(
-                value: 'settings',
-                child: Row(
-                  children: [
-                    Icon(Icons.settings_outlined, color: Color(0xFF001F3F)),
-                    SizedBox(width: 10),
-                    Text('Settings'),
-                  ],
+              elevation: 12,
+              offset: const Offset(0, 60),
+              onSelected: _onMenuSelected,
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'vehicle_info',
+                  child: Row(
+                    children: [
+                      Icon(Icons.directions_bus_rounded, color: navy, size: 22),
+                      SizedBox(width: 12),
+                      Text('Vehicle Info', style: TextStyle(color: navy, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'logout',
+                  child: Row(
+                    children: [
+                      Icon(Icons.logout_rounded, color: Color(0xFFD62828), size: 22),
+                      SizedBox(width: 12),
+                      Text('Sign Out', style: TextStyle(color: Color(0xFFD62828), fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

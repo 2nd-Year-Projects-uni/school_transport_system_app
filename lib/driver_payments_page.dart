@@ -224,6 +224,24 @@ class _DriverPaymentsPageState extends State<DriverPaymentsPage> {
           .doc(childId)
           .update({'feeStatus': newStatus});
 
+      if (newStatus == 'paid' && _vehicleId != null) {
+        final now = DateTime.now();
+        final dateKey = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+        final student = _students.firstWhere((s) => s['id'] == childId, orElse: () => {});
+        final childName = student['name'] ?? 'Your child';
+
+        await FirebaseFirestore.instance.collection('d_notices').add({
+          'vanId': _vehicleId,
+          'childId': childId,
+          'childName': childName,
+          'sender': 'driver',
+          'message': 'Your monthly payment receipt has been accepted.',
+          'dateKey': dateKey,
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+        });
+      }
+
       // Refresh local list
       setState(() {
         final idx = _students.indexWhere((s) => s['id'] == childId);

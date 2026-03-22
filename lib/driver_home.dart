@@ -7,6 +7,8 @@ import 'services/location_service.dart';
 import 'driver_students_page.dart';
 import 'driver_notices_page.dart';
 import 'driver_payments_page.dart';
+import 'dart:async';
+import 'services/notification_service.dart';
 
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({Key? key}) : super(key: key);
@@ -26,6 +28,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
   bool _isOpeningJourney = false;
   bool _isJourneyActive = false;
   String _journeyMode = 'morning';
+
+  StreamSubscription<QuerySnapshot>? _parentNoticesSubscription;
+  bool _isFirstNoticeLoad = true;
+  final Set<String> _seenParentNoticeIds = {};
 
   String _placeName(dynamic place) {
     if (place is String) {
@@ -338,6 +344,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
           _isJoinVehicleExpanded = false;
           _isJourneyActive = inProgress;
         });
+        _listenToParentNotices(vehicleId);
       } else {
         _locationService.setActiveVehicle(
           vehicleId: null,
@@ -350,6 +357,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
           _isJoinVehicleExpanded = false;
           _isJourneyActive = false;
         });
+        _cancelParentNoticesListener();
       }
     } else {
       _locationService.setActiveVehicle(
@@ -363,7 +371,52 @@ class _DriverHomePageState extends State<DriverHomePage> {
         _isJoinVehicleExpanded = false;
         _isJourneyActive = false;
       });
+      _cancelParentNoticesListener();
     }
+  }
+
+  void _listenToParentNotices(String vehicleId) {
+    _cancelParentNoticesListener();
+    _isFirstNoticeLoad = true;
+    _seenParentNoticeIds.clear();
+
+    _parentNoticesSubscription = FirebaseFirestore.instance
+        .collection('notices')
+        .where('vanId', isEqualTo: vehicleId)
+        .where('sender', isEqualTo: 'parent')
+        .snapshots()
+        .listen((snapshot) {
+      if (_isFirstNoticeLoad) {
+        for (var doc in snapshot.docs) {
+          _seenParentNoticeIds.add(doc.id);
+        }
+        _isFirstNoticeLoad = false;
+        return;
+      }
+
+      for (var change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          if (!_seenParentNoticeIds.contains(change.doc.id)) {
+            _seenParentNoticeIds.add(change.doc.id);
+            final data = change.doc.data();
+            if (data != null) {
+              final childName = data['childName'] ?? 'A Parent';
+              final message = data['message'] ?? 'Sent you a note.';
+              NotificationService.instance.showNoticeNotification(
+                id: change.doc.id.hashCode,
+                title: 'Note from $childName',
+                body: message.toString(),
+              );
+            }
+          }
+        }
+      }
+    });
+  }
+
+  void _cancelParentNoticesListener() {
+    _parentNoticesSubscription?.cancel();
+    _parentNoticesSubscription = null;
   }
 
   Future<void> _leaveVehicle() async {
@@ -403,6 +456,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
         _isJoinVehicleExpanded = false;
         _isJourneyActive = false;
       });
+      _cancelParentNoticesListener();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You have left the vehicle.')),
       );
@@ -424,6 +478,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   @override
   void dispose() {
+    _cancelParentNoticesListener();
     _locationService.stopTracking();
     _vehicleCodeController.dispose();
     super.dispose();

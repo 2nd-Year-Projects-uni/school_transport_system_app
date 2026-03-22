@@ -1,3 +1,5 @@
+# Ignore Firebase service files
+android/app/google-services.json
 # Miscellaneous
 *.class
 *.log

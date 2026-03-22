@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
@@ -28,7 +29,8 @@ class DriverTrackingMapPage extends StatefulWidget {
 }
 
 class _DriverTrackingMapPageState extends State<DriverTrackingMapPage> {
-  static const String _databaseUrl =
+  static String get _databaseUrl =>
+      dotenv.env['FIREBASE_DATABASE_URL'] ??
       'https://school-transport-system-6eb9f-default-rtdb.asia-southeast1.firebasedatabase.app';
 
   static const Color navy = Color(0xFF001F3F);

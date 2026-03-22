@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class ChildSettingsPage extends StatefulWidget {
@@ -33,13 +36,14 @@ class _ChildSettingsPageState extends State<ChildSettingsPage> {
   LatLng? selectedLocation;
   String? _selectedSchool;
   GoogleMapController? mapController;
+  final String _googleMapsApiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
 
   static const Color navy = Color(0xFF001F3F);
   static const Color blue = Color(0xFF005792);
   static const Color teal = Color(0xFF00B894);
 
-  static const String _googlePlacesApiKey =
-      '***REMOVED***';
+  static String get _googlePlacesApiKey =>
+      dotenv.env['GOOGLE_PLACES_API_KEY'] ?? '';
   List<_PlaceSuggestion> _schoolSuggestions = [];
   List<_PlaceSuggestion> _pickupSuggestions = [];
   Timer? _schoolSearchTimer;
@@ -515,24 +519,27 @@ class _ChildSettingsPageState extends State<ChildSettingsPage> {
 
   Future<void> _updateChild() async {
     if (nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Please enter a child name")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a child name")),
+      );
       return;
     }
 
-    if (_selectedSchool == null || _selectedSchool != schoolController.text.trim()) {
+    if (_selectedSchool == null ||
+        _selectedSchool != schoolController.text.trim()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select a valid school from the dropdown suggestions")),
+        const SnackBar(
+          content: Text(
+            "Please select a valid school from the dropdown suggestions",
+          ),
+        ),
       );
       return;
     }
 
     if (selectedLocation == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please set a pickup location"),
-        ),
+        const SnackBar(content: Text("Please set a pickup location")),
       );
       return;
     }
@@ -544,14 +551,14 @@ class _ChildSettingsPageState extends State<ChildSettingsPage> {
           .collection('Children')
           .doc(widget.childId)
           .update({
-        'name': nameController.text.trim(),
-        'school': schoolController.text.trim(),
-        'pickupLocation': GeoPoint(
-          selectedLocation!.latitude,
-          selectedLocation!.longitude,
-        ),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+            'name': nameController.text.trim(),
+            'school': schoolController.text.trim(),
+            'pickupLocation': GeoPoint(
+              selectedLocation!.latitude,
+              selectedLocation!.longitude,
+            ),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -648,8 +655,10 @@ class _ChildSettingsPageState extends State<ChildSettingsPage> {
                   // Child Name Field
                   TextField(
                     controller: nameController,
-                    decoration:
-                        _inputDecoration('Child Name', Icons.person_outline),
+                    decoration: _inputDecoration(
+                      'Child Name',
+                      Icons.person_outline,
+                    ),
                   ),
                   const SizedBox(height: 16),
 
@@ -659,14 +668,21 @@ class _ChildSettingsPageState extends State<ChildSettingsPage> {
                     children: [
                       TextField(
                         controller: schoolController,
-                        decoration: _inputDecoration('School', Icons.school_outlined).copyWith(
-                          suffixIcon: schoolController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.close, color: Colors.grey),
-                                  onPressed: _clearSchoolInput,
-                                )
-                              : null,
-                        ),
+                        decoration:
+                            _inputDecoration(
+                              'School',
+                              Icons.school_outlined,
+                            ).copyWith(
+                              suffixIcon: schoolController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(
+                                        Icons.close,
+                                        color: Colors.grey,
+                                      ),
+                                      onPressed: _clearSchoolInput,
+                                    )
+                                  : null,
+                            ),
                         onChanged: _onSchoolChanged,
                       ),
                       if (_schoolSuggestions.isNotEmpty)
@@ -738,34 +754,37 @@ class _ChildSettingsPageState extends State<ChildSettingsPage> {
                   TextField(
                     controller: pickupSearchController,
                     onChanged: _onPickupSearchChanged,
-                    decoration: _inputDecoration(
-                            'Search pickup place', Icons.search)
-                        .copyWith(
-                      suffixIcon: _resolvingPickupPlace
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2),
-                              ),
-                            )
-                          : (pickupSearchController.text.trim().isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(
-                                    Icons.close,
-                                    color: Colors.grey,
+                    decoration:
+                        _inputDecoration(
+                          'Search pickup place',
+                          Icons.search,
+                        ).copyWith(
+                          suffixIcon: _resolvingPickupPlace
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   ),
-                                  onPressed: () {
-                                    setState(() {
-                                      pickupSearchController.clear();
-                                      _pickupSuggestions = [];
-                                    });
-                                  },
                                 )
-                              : null),
-                    ),
+                              : (pickupSearchController.text.trim().isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(
+                                          Icons.close,
+                                          color: Colors.grey,
+                                        ),
+                                        onPressed: () {
+                                          setState(() {
+                                            pickupSearchController.clear();
+                                            _pickupSuggestions = [];
+                                          });
+                                        },
+                                      )
+                                    : null),
+                        ),
                   ),
                   if (_pickupSuggestions.isNotEmpty)
                     Container(
@@ -839,7 +858,8 @@ class _ChildSettingsPageState extends State<ChildSettingsPage> {
                         children: [
                           GoogleMap(
                             initialCameraPosition: CameraPosition(
-                              target: selectedLocation ?? _initialPosition.target,
+                              target:
+                                  selectedLocation ?? _initialPosition.target,
                               zoom: selectedLocation != null ? 15 : 13,
                             ),
                             onMapCreated: (controller) {
@@ -863,9 +883,10 @@ class _ChildSettingsPageState extends State<ChildSettingsPage> {
                                     Marker(
                                       markerId: const MarkerId('pickup'),
                                       position: selectedLocation!,
-                                      icon: BitmapDescriptor.defaultMarkerWithHue(
-                                        BitmapDescriptor.hueBlue,
-                                      ),
+                                      icon:
+                                          BitmapDescriptor.defaultMarkerWithHue(
+                                            BitmapDescriptor.hueBlue,
+                                          ),
                                       infoWindow: const InfoWindow(
                                         title: "Pickup Point",
                                       ),
@@ -896,7 +917,9 @@ class _ChildSettingsPageState extends State<ChildSettingsPage> {
                   const SizedBox(height: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: teal.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(12),
@@ -910,7 +933,7 @@ class _ChildSettingsPageState extends State<ChildSettingsPage> {
                             selectedLocation == null
                                 ? "Lat: ---, Lng: ---"
                                 : "Lat: ${selectedLocation!.latitude.toStringAsFixed(5)}, "
-                                    "Lng: ${selectedLocation!.longitude.toStringAsFixed(5)}",
+                                      "Lng: ${selectedLocation!.longitude.toStringAsFixed(5)}",
                             style: const TextStyle(color: navy, fontSize: 13),
                           ),
                         ),

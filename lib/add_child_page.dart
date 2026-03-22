@@ -5,6 +5,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class AddChildPage extends StatefulWidget {
@@ -26,11 +29,12 @@ class _AddChildPageState extends State<AddChildPage> {
   LatLng? selectedLocation;
   String? _selectedSchool;
   GoogleMapController? mapController;
+  final String _googleMapsApiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
 
   final String parentId = FirebaseAuth.instance.currentUser!.uid;
 
-  static const String _googlePlacesApiKey =
-      '***REMOVED***';
+  static String get _googlePlacesApiKey =>
+      dotenv.env['GOOGLE_PLACES_API_KEY'] ?? '';
   List<_PlaceSuggestion> _schoolSuggestions = [];
   List<_PlaceSuggestion> _pickupSuggestions = [];
   Timer? _schoolSearchTimer;
@@ -460,15 +464,20 @@ class _AddChildPageState extends State<AddChildPage> {
 
   Future<void> saveStudent() async {
     if (nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Please enter a child name")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a child name")),
+      );
       return;
     }
 
-    if (_selectedSchool == null || _selectedSchool != schoolController.text.trim()) {
+    if (_selectedSchool == null ||
+        _selectedSchool != schoolController.text.trim()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please select a valid school from the dropdown suggestions")),
+        const SnackBar(
+          content: Text(
+            "Please select a valid school from the dropdown suggestions",
+          ),
+        ),
       );
       return;
     }
@@ -602,14 +611,18 @@ class _AddChildPageState extends State<AddChildPage> {
               children: [
                 TextField(
                   controller: schoolController,
-                  decoration: _inputDecoration('School', Icons.school_outlined).copyWith(
-                    suffixIcon: schoolController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.close, color: Colors.grey),
-                            onPressed: _clearSchoolInput,
-                          )
-                        : null,
-                  ),
+                  decoration: _inputDecoration('School', Icons.school_outlined)
+                      .copyWith(
+                        suffixIcon: schoolController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(
+                                  Icons.close,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: _clearSchoolInput,
+                              )
+                            : null,
+                      ),
                   onChanged: _onSchoolChanged,
                 ),
                 if (_schoolSuggestions.isNotEmpty)

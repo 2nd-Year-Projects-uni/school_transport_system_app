@@ -1,15 +1,12 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class MapboxConfig {
   const MapboxConfig._();
 
-  static const String accessToken = String.fromEnvironment(
-    'MAPBOX_ACCESS_TOKEN',
-    defaultValue: '',
-  );
+  static String get accessToken => dotenv.env['MAPBOX_ACCESS_TOKEN'] ?? '';
 
-  static const String styleId = String.fromEnvironment(
-    'MAPBOX_STYLE_ID',
-    defaultValue: 'mapbox/light-v11',
-  );
+  static String get styleId =>
+      dotenv.env['MAPBOX_STYLE_ID'] ?? 'mapbox/light-v11';
 
   static bool get isConfigured => accessToken.trim().isNotEmpty;
 

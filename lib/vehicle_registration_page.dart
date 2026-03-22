@@ -6,11 +6,9 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import 'services/vehicle_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-const String _googlePlacesApiKey = String.fromEnvironment(
-  'GOOGLE_PLACES_API_KEY',
-  defaultValue: '***REMOVED***',
-);
+final String _googleMapsApiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
 
 final Color _navy = const Color(0xFF001F3F);
 final Color _blue = const Color(0xFF005792);

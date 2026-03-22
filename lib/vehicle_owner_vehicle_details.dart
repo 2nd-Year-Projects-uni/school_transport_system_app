@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 final Color _detailsNavy = const Color(0xFF001F3F);
 final Color _detailsBlue = const Color(0xFF005792);
@@ -86,10 +88,7 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
     final Map<int, Timer> routePointSearchTimers = {};
 
     Future<List<_PlaceSuggestion>> _fetchPlaceSuggestions(String query) async {
-      const String _googlePlacesApiKey = String.fromEnvironment(
-        'GOOGLE_PLACES_API_KEY',
-        defaultValue: '***REMOVED***',
-      );
+      final String _googleMapsApiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
       final String trimmedQuery = query.trim();
       if (_googlePlacesApiKey.isEmpty || trimmedQuery.length < 2) {
         return [];

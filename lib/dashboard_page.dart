@@ -3,6 +3,7 @@ import 'attendance_tab.dart';
 import 'd_info_child.dart';
 import 'child_settings.dart';
 import 'c_home_page.dart';
+import 'driver_tracking_map.dart';
 
 class DashboardPage extends StatefulWidget {
   final String childId;
@@ -147,7 +148,7 @@ class MapTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(child: Text("Map", style: TextStyle(fontSize: 16)));
+    return DriverTrackingMapPage(childId: childId, childName: childName);
   }
 }
 

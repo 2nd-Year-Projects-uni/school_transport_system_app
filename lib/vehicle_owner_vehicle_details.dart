@@ -10,6 +10,51 @@ final Color _detailsBlue = const Color(0xFF005792);
 final Color _detailsTeal = const Color(0xFF00B894);
 
 class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
+  String _placeName(dynamic place, {String fallback = ''}) {
+    if (place is String) {
+      final String trimmed = place.trim();
+      return trimmed.isNotEmpty ? trimmed : fallback;
+    }
+    if (place is Map) {
+      final dynamic name = place['name'];
+      if (name is String && name.trim().isNotEmpty) {
+        return name.trim();
+      }
+    }
+    return fallback;
+  }
+
+  List<String> _placeNames(dynamic places) {
+    final List<dynamic> list = places as List<dynamic>? ?? const <dynamic>[];
+    return list
+        .map((place) => _placeName(place))
+        .where((name) => name.isNotEmpty)
+        .toList();
+  }
+
+  Map<String, double>? _placeCoordinates(dynamic place) {
+    if (place is! Map) {
+      return null;
+    }
+    final double? latitude = (place['latitude'] as num?)?.toDouble();
+    final double? longitude = (place['longitude'] as num?)?.toDouble();
+    if (latitude == null || longitude == null) {
+      return null;
+    }
+    return <String, double>{'latitude': latitude, 'longitude': longitude};
+  }
+
+  Map<String, dynamic> _toPlaceData(
+    String name,
+    Map<String, double>? coordinates,
+  ) {
+    return <String, dynamic>{
+      'name': name.trim(),
+      'latitude': coordinates?['latitude'],
+      'longitude': coordinates?['longitude'],
+    };
+  }
+
   void _showEditDialog(BuildContext context) {
     final vehicleId = vehicle['id'] ?? (vehicle['docId'] ?? null);
     if (vehicleId == null) {
@@ -19,16 +64,22 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
       return;
     }
 
-    final List<String> initialRoutePoints =
-        (vehicle['routePoints'] as List<dynamic>? ?? [])
-            .whereType<String>()
-            .toList();
+    final List<dynamic> initialRoutePointData =
+        vehicle['routePoints'] as List<dynamic>? ?? <dynamic>[];
+    final List<String> initialRoutePoints = _placeNames(initialRoutePointData);
+    final List<Map<String, double>?> routePointCoordinates = List.generate(
+      initialRoutePoints.length,
+      (i) => i < initialRoutePointData.length
+          ? _placeCoordinates(initialRoutePointData[i])
+          : null,
+    );
     final List<TextEditingController> routePointControllers = List.generate(
       initialRoutePoints.length,
       (i) => TextEditingController(text: initialRoutePoints[i]),
     );
     while (routePointControllers.length < 2) {
       routePointControllers.add(TextEditingController());
+      routePointCoordinates.add(null);
     }
     final List<List<_PlaceSuggestion>> routePointSuggestions = [[], []];
     final List<bool> routePointConfirmed = [true, true];
@@ -132,9 +183,93 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
       return mappedLegacy.take(5).toList();
     }
 
+    Future<Map<String, double>?> _fetchPlaceCoordinates(String placeId) async {
+      const String _googlePlacesApiKey = String.fromEnvironment(
+        'GOOGLE_PLACES_API_KEY',
+        defaultValue: '***REMOVED***',
+      );
+      final String trimmedPlaceId = placeId.trim();
+      if (_googlePlacesApiKey.isEmpty || trimmedPlaceId.isEmpty) {
+        return null;
+      }
+
+      try {
+        final Uri newApiUri = Uri.https(
+          'places.googleapis.com',
+          '/v1/places/$trimmedPlaceId',
+        );
+        final http.Response newApiResponse = await http.get(
+          newApiUri,
+          headers: <String, String>{
+            'X-Goog-Api-Key': _googlePlacesApiKey,
+            'X-Goog-FieldMask': 'location',
+          },
+        );
+        if (newApiResponse.statusCode == 200) {
+          final Map<String, dynamic> decoded =
+              jsonDecode(newApiResponse.body) as Map<String, dynamic>;
+          final Map<String, dynamic> location =
+              decoded['location'] as Map<String, dynamic>? ??
+              <String, dynamic>{};
+          final double? latitude = (location['latitude'] as num?)?.toDouble();
+          final double? longitude = (location['longitude'] as num?)?.toDouble();
+          if (latitude != null && longitude != null) {
+            return <String, double>{
+              'latitude': latitude,
+              'longitude': longitude,
+            };
+          }
+        }
+      } catch (_) {
+        // Fall back to legacy endpoint below.
+      }
+
+      try {
+        final Uri legacyUri = Uri.https(
+          'maps.googleapis.com',
+          '/maps/api/place/details/json',
+          <String, String>{
+            'place_id': trimmedPlaceId,
+            'fields': 'geometry/location',
+            'key': _googlePlacesApiKey,
+          },
+        );
+        final http.Response legacyResponse = await http.get(legacyUri);
+        if (legacyResponse.statusCode != 200) {
+          return null;
+        }
+        final Map<String, dynamic> decodedLegacy =
+            jsonDecode(legacyResponse.body) as Map<String, dynamic>;
+        final String status =
+            decodedLegacy['status'] as String? ?? 'UNKNOWN_ERROR';
+        if (status != 'OK') {
+          return null;
+        }
+        final Map<String, dynamic> result =
+            decodedLegacy['result'] as Map<String, dynamic>? ??
+            <String, dynamic>{};
+        final Map<String, dynamic> geometry =
+            result['geometry'] as Map<String, dynamic>? ?? <String, dynamic>{};
+        final Map<String, dynamic> location =
+            geometry['location'] as Map<String, dynamic>? ??
+            <String, dynamic>{};
+        final double? latitude = (location['lat'] as num?)?.toDouble();
+        final double? longitude = (location['lng'] as num?)?.toDouble();
+        if (latitude == null || longitude == null) {
+          return null;
+        }
+        return <String, double>{'latitude': latitude, 'longitude': longitude};
+      } catch (_) {
+        return null;
+      }
+    }
+
     void _onRoutePointChanged(int index, String value, StateSetter setState) {
       if (index < routePointConfirmed.length) {
         routePointConfirmed[index] = false;
+      }
+      if (index < routePointCoordinates.length) {
+        routePointCoordinates[index] = null;
       }
       routePointSearchTimers[index]?.cancel();
       routePointSearchTimers[index] = Timer(
@@ -248,11 +383,18 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
                                           color: _detailsBlue,
                                         ),
                                         title: Text(suggestion.description),
-                                        onTap: () {
+                                        onTap: () async {
+                                          final Map<String, double>?
+                                          coordinates =
+                                              await _fetchPlaceCoordinates(
+                                                suggestion.placeId,
+                                              );
                                           setState(() {
                                             routePointConfirmed[i] = true;
                                             routePointControllers[i].text =
                                                 suggestion.description;
+                                            routePointCoordinates[i] =
+                                                coordinates;
                                             routePointSuggestions[i] = [];
                                           });
                                         },
@@ -331,11 +473,22 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
                   ),
                   ElevatedButton(
                     onPressed: () async {
-                      final List<String> updatedRoutePoints =
-                          routePointControllers
-                              .map((c) => c.text.trim())
-                              .where((v) => v.isNotEmpty)
-                              .toList();
+                      final List<Map<String, dynamic>> updatedRoutePoints =
+                          <Map<String, dynamic>>[];
+                      for (int i = 0; i < routePointControllers.length; i++) {
+                        final String placeName = routePointControllers[i].text
+                            .trim();
+                        if (placeName.isEmpty) {
+                          continue;
+                        }
+                        final Map<String, double>? coordinates =
+                            i < routePointCoordinates.length
+                            ? routePointCoordinates[i]
+                            : null;
+                        updatedRoutePoints.add(
+                          _toPlaceData(placeName, coordinates),
+                        );
+                      }
                       if (airCondition.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -397,18 +550,15 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
     final String vehicleType = vehicle['vehicleType'] as String? ?? 'Vehicle';
     final String registerNumber =
         vehicle['registerNumber'] as String? ?? 'Not available';
-    final String startingLocation =
-        vehicle['startingLocation'] as String? ?? 'Not available';
+    final String startingLocation = _placeName(
+      vehicle['startingLocation'],
+      fallback: 'Not available',
+    );
     final String condition = vehicle['condition'] as String? ?? 'Not available';
     final String photoUrl = vehicle['vehiclePhotoUrl'] as String? ?? '';
     final bool isApproved = vehicle['status'] as bool? ?? false;
-    final List<String> schools = (vehicle['schools'] as List<dynamic>? ?? [])
-        .whereType<String>()
-        .toList();
-    final List<String> routePoints =
-        (vehicle['routePoints'] as List<dynamic>? ?? [])
-            .whereType<String>()
-            .toList();
+    final List<String> schools = _placeNames(vehicle['schools']);
+    final List<String> routePoints = _placeNames(vehicle['routePoints']);
     final String insuranceExpiryDate = _formatDate(
       vehicle['insuranceExpiryDate'],
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'services/location_service.dart';
 
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({Key? key}) : super(key: key);
@@ -10,16 +11,49 @@ class DriverHomePage extends StatefulWidget {
 }
 
 class _DriverHomePageState extends State<DriverHomePage> {
+  final LocationService _locationService = LocationService();
+
   String? _currentVehicleId;
   Map<String, dynamic>? _currentVehicleData;
   bool _isAssignedVehicleExpanded = false;
   bool _isJoinVehicleExpanded = false;
   bool _isLeaving = false;
 
+  String _placeName(dynamic place) {
+    if (place is String) {
+      return place.trim();
+    }
+    if (place is Map) {
+      final dynamic name = place['name'];
+      if (name is String) {
+        return name.trim();
+      }
+    }
+    return '';
+  }
+
+  List<String> _placeNameList(dynamic places) {
+    final List<dynamic> list = places as List<dynamic>? ?? const <dynamic>[];
+    return list.map(_placeName).where((name) => name.isNotEmpty).toList();
+  }
+
   @override
   void initState() {
     super.initState();
     _loadCurrentVehicle();
+    _startLocationTracking();
+  }
+
+  Future<void> _startLocationTracking() async {
+    try {
+      await _locationService.startTracking();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Location error: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _loadCurrentVehicle() async {
@@ -115,6 +149,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   @override
   void dispose() {
+    _locationService.stopTracking();
     _vehicleCodeController.dispose();
     super.dispose();
   }
@@ -485,34 +520,23 @@ class _DriverHomePageState extends State<DriverHomePage> {
                               padding: const EdgeInsets.only(top: 12),
                               child: Builder(
                                 builder: (context) {
+                                  final String
+                                  parsedStartingLocation = _placeName(
+                                    _currentVehicleData!['startingLocation'],
+                                  );
                                   final String startingLocation =
-                                      (_currentVehicleData!['startingLocation']
-                                                  as String?)
-                                              ?.trim()
-                                              .isNotEmpty ==
-                                          true
-                                      ? (_currentVehicleData!['startingLocation']
-                                                as String)
-                                            .trim()
+                                      parsedStartingLocation.isNotEmpty
+                                      ? parsedStartingLocation
                                       : 'Not available';
 
-                                  final List<String> schools =
-                                      (_currentVehicleData!['schools']
-                                                  as List<dynamic>? ??
-                                              const <dynamic>[])
-                                          .whereType<String>()
-                                          .map((e) => e.trim())
-                                          .where((e) => e.isNotEmpty)
-                                          .toList();
+                                  final List<String> schools = _placeNameList(
+                                    _currentVehicleData!['schools'],
+                                  );
 
                                   final List<String> routePoints =
-                                      (_currentVehicleData!['routePoints']
-                                                  as List<dynamic>? ??
-                                              const <dynamic>[])
-                                          .whereType<String>()
-                                          .map((e) => e.trim())
-                                          .where((e) => e.isNotEmpty)
-                                          .toList();
+                                      _placeNameList(
+                                        _currentVehicleData!['routePoints'],
+                                      );
 
                                   return Column(
                                     children: [
@@ -1238,6 +1262,20 @@ class _DriverHomePageState extends State<DriverHomePage> {
             ),
             const SizedBox(height: 24),
           ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          if (_locationService.isTracking) {
+            await _locationService.stopTracking();
+          } else {
+            await _startLocationTracking();
+          }
+          if (mounted) setState(() {});
+        },
+        backgroundColor: _locationService.isTracking ? Colors.red : Colors.green,
+        child: Icon(
+          _locationService.isTracking ? Icons.location_off : Icons.location_on,
         ),
       ),
     );

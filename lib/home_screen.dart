@@ -312,7 +312,24 @@ class _SelectChildPageState extends State<SelectChildPage> {
                     );
                   }
 
-                  final students = snapshot.data!.docs;
+                  final students = snapshot.data!.docs.toList();
+                  students.sort((a, b) {
+                    final dataA = a.data() as Map<String, dynamic>;
+                    final dataB = b.data() as Map<String, dynamic>;
+                    final hasVanA = dataA.containsKey('vanId') &&
+                        dataA['vanId'] != null &&
+                        dataA['vanId'].toString().trim().isNotEmpty;
+                    final hasVanB = dataB.containsKey('vanId') &&
+                        dataB['vanId'] != null &&
+                        dataB['vanId'].toString().trim().isNotEmpty;
+
+                    if (hasVanA && !hasVanB) return -1;
+                    if (!hasVanA && hasVanB) return 1;
+
+                    final nameA = (dataA['name'] ?? '').toString().trim().toLowerCase();
+                    final nameB = (dataB['name'] ?? '').toString().trim().toLowerCase();
+                    return nameA.compareTo(nameB);
+                  });
 
                   return ListView.separated(
                     itemCount: students.length,

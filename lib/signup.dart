@@ -25,6 +25,8 @@ class _SignupPageState extends State<SignupPage> {
     setState(() => isLoading = true);
     try {
       await _authService.signUp(
+        fullName: fullNameController.text,
+        contactNumber: contactController.text,
         email: emailController.text,
         password: passwordController.text,
       );

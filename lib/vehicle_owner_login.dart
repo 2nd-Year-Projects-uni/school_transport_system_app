@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'services/auth_service.dart';
+import 'services/notification_service.dart';
 import 'vehicle_owner_home.dart';
 
 final Color navy = const Color(0xFF001F3F);
@@ -228,6 +229,9 @@ class _VehicleOwnerLoginPageState extends State<VehicleOwnerLoginPage>
       if (!doc.exists || doc['userType'] != 'vehicle_owner') {
         throw Exception('No vehicle owner account found.');
       }
+
+      await NotificationService.instance.saveTokenToFirestore();
+      await NotificationService.instance.subscribeToUserTopic('vehicle_owner');
 
       if (!mounted) return;
       Navigator.pushReplacement(

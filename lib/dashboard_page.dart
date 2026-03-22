@@ -4,6 +4,8 @@ import 'attendance_tab.dart';
 import 'd_info_child.dart';
 import 'c_home_page.dart';
 import 'driver_tracking_map.dart';
+import 'dart:async';
+import 'services/notification_service.dart';
 
 class DashboardPage extends StatefulWidget {
   final String childId;
@@ -24,6 +26,9 @@ class _DashboardPageState extends State<DashboardPage> {
   static const Color teal = Color(0xFF00B894);
 
   int _currentIndex = 0;
+  StreamSubscription<QuerySnapshot>? _noticesSubscription;
+  bool _isFirstLoad = true;
+  final Set<String> _seenNoticeIds = {};
 
   late final List<Widget> _pages;
   final List<String> _tabLabels = const [
@@ -50,6 +55,56 @@ class _DashboardPageState extends State<DashboardPage> {
       AttendanceTab(childId: widget.childId, childName: widget.childName),
       NoticesTab(childId: widget.childId, childName: widget.childName),
     ];
+
+    _listenToNewNotices();
+  }
+
+  Future<void> _listenToNewNotices() async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('Children').doc(widget.childId).get();
+      final vanId = doc.data()?['vanId']?.toString() ?? '';
+      if (vanId.isEmpty) return;
+
+      _noticesSubscription = FirebaseFirestore.instance
+          .collection('d_notices')
+          .where('vanId', isEqualTo: vanId)
+          .snapshots()
+          .listen((snapshot) {
+            
+            if (_isFirstLoad) {
+              for (var doc in snapshot.docs) {
+                _seenNoticeIds.add(doc.id);
+              }
+              _isFirstLoad = false;
+              return;
+            }
+
+            for (var change in snapshot.docChanges) {
+              if (change.type == DocumentChangeType.added) {
+                if (!_seenNoticeIds.contains(change.doc.id)) {
+                  _seenNoticeIds.add(change.doc.id);
+                  final data = change.doc.data();
+                  if (data != null) {
+                    final message = data['message'] ?? 'You have a new notice.';
+                    NotificationService.instance.showNoticeNotification(
+                      id: change.doc.id.hashCode,
+                      title: 'New Notice from Driver',
+                      body: message.toString(),
+                    );
+                  }
+                }
+              }
+            }
+          });
+    } catch (e) {
+      debugPrint('Error listening to notices: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _noticesSubscription?.cancel();
+    super.dispose();
   }
 
   void _onMenuSelected(String value) {

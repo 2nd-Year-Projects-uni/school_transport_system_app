@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'services/auth_service.dart';
+import 'services/notification_service.dart';
 import 'driver_home.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -583,6 +584,8 @@ class _DriverLoginPageState extends State<DriverLoginPage>
       if (doc['approved'] != true) {
         throw Exception('Your registration is still pending admin approval.');
       }
+      await NotificationService.instance.saveTokenToFirestore();
+      await NotificationService.instance.subscribeToUserTopic('driver');
       // TODO: Navigate to driver dashboard/home
       Navigator.pushReplacement(
         context,

@@ -119,7 +119,7 @@ class NotificationService {
     if (notification == null) return;
 
     await showNoticeNotification(
-      id: notification.hashCode,
+      id: notification.hashCode & 0x7FFFFFFF,
       title: notification.title ?? '',
       body: notification.body ?? '',
       payload: message.data['route'],

@@ -87,7 +87,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   if (data != null) {
                     final message = data['message'] ?? 'You have a new notice.';
                     NotificationService.instance.showNoticeNotification(
-                      id: change.doc.id.hashCode,
+                      id: change.doc.id.hashCode & 0x7FFFFFFF,
                       title: 'New Notice from Driver',
                       body: message.toString(),
                     );

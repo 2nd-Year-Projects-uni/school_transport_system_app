@@ -1,12 +1,16 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'add_child_page.dart';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'login.dart';
+import 'admin/admin_login.dart';
+import 'admin/superadmin_login.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(MyApp());
 }
 
@@ -16,7 +20,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'School Van App',
       debugShowCheckedModeBanner: false,
-      home: LoginPage(),
+      home: kIsWeb ? SuperAdminLogin() : LoginPage(),
     );
   }
 }

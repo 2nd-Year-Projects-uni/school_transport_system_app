@@ -17,7 +17,7 @@ dependencies {
 
 android {
     namespace = "com.example.school_van_app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 35
     ndkVersion = flutter.ndkVersion
     
 
@@ -37,7 +37,7 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 21
-        targetSdk = 33    
+        targetSdk = 35    
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

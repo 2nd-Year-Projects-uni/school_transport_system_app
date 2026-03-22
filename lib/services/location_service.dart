@@ -45,6 +45,10 @@ class LocationService {
     _routeHistory.clear();
     _lastRoutePoint = null;
     _lastRoutePointAt = null;
+    if (!_isTracking) {
+      await startTracking();
+    }
+
     final ref = _database.ref('liveTracking/$vehicleId');
 
     await ref.update({
@@ -60,6 +64,24 @@ class LocationService {
     final vehicleId = _activeVehicleId;
     if (vehicleId == null || vehicleId.isEmpty) return;
 
+    _isJourneyActive = false;
+    _routeHistory.clear();
+    _lastRoutePoint = null;
+    _lastRoutePointAt = null;
+
+    // Completely stop tracking to avoid background reads when journey is manually ended.
+    await _positionSubscription?.cancel();
+    _positionSubscription = null;
+    _isTracking = false;
+
+    // Clear user location occasionally to indicate offline state
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'currentLocation': FieldValue.delete(),
+      }).catchError((_) {});
+    }
+
     try {
       await _database.ref('liveTracking/$vehicleId').update({
         'journeyStatus': 'ended',
@@ -68,11 +90,6 @@ class LocationService {
       });
     } catch (_) {
       // Ignore cleanup failures.
-    } finally {
-      _isJourneyActive = false;
-      _routeHistory.clear();
-      _lastRoutePoint = null;
-      _lastRoutePointAt = null;
     }
   }
 
@@ -184,11 +201,17 @@ class LocationService {
         'currentLocation': FieldValue.delete(),
       });
 
-      if (_isJourneyActive &&
-          _activeVehicleId != null &&
-          _activeVehicleId!.isNotEmpty) {
+      final bool wasActive = _isJourneyActive;
+      final String? vId = _activeVehicleId;
+
+      _isJourneyActive = false;
+      _routeHistory.clear();
+      _lastRoutePoint = null;
+      _lastRoutePointAt = null;
+
+      if (wasActive && vId != null && vId.isNotEmpty) {
         try {
-          await _database.ref('liveTracking/${_activeVehicleId!}').update({
+          await _database.ref('liveTracking/$vId').update({
             'journeyStatus': 'paused',
             'updatedAt': ServerValue.timestamp,
           });
@@ -196,11 +219,6 @@ class LocationService {
           // Ignore RTDB cleanup failures.
         }
       }
-
-      _isJourneyActive = false;
-      _routeHistory.clear();
-      _lastRoutePoint = null;
-      _lastRoutePointAt = null;
     }
   }
 

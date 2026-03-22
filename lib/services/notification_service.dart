@@ -32,6 +32,13 @@ class NotificationService {
     importance: Importance.high,
   );
 
+  static const AndroidNotificationChannel _ongoingChannel = AndroidNotificationChannel(
+    'school_van_ongoing',
+    'Active Journey Tracking',
+    description: 'Persistent notification shown while a journey is active.',
+    importance: Importance.low,
+  );
+
   // ────────────────────────────────────────────────────────────────────
   // Initialise – call this once from main()
   // ────────────────────────────────────────────────────────────────────
@@ -101,6 +108,11 @@ class NotificationService {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_channel);
+
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_ongoingChannel);
   }
 
   // ────────────────────────────────────────────────────────────────────
@@ -151,6 +163,41 @@ class NotificationService {
       details,
       payload: payload,
     );
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Ongoing Journey Notification
+  // ────────────────────────────────────────────────────────────────────
+
+  Future<void> showOngoingJourneyNotification() async {
+    final androidDetails = AndroidNotificationDetails(
+      _ongoingChannel.id,
+      _ongoingChannel.name,
+      channelDescription: _ongoingChannel.description,
+      importance: Importance.low, // Silent but persistent
+      priority: Priority.low,
+      ongoing: true, // Cannot be swiped away
+      autoCancel: false,
+      icon: '@mipmap/ic_launcher',
+    );
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentSound: false,
+      interruptionLevel: InterruptionLevel.active,
+    );
+    final details =
+        NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+    await _localNotifications.show(
+      99999, // Reserved fixed ID for the ongoing journey
+      'Journey in Progress',
+      'Live tracking is active. Tap to return and manage your trip.',
+      details,
+    );
+  }
+
+  Future<void> endOngoingJourneyNotification() async {
+    await _localNotifications.cancel(99999);
   }
 
   // ────────────────────────────────────────────────────────────────────
@@ -221,7 +268,9 @@ class NotificationService {
     await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
-        .update({'fcmToken': token});
+        .update({
+      'fcmTokens': FieldValue.arrayUnion([token])
+    });
 
     debugPrint('[FCM] Token saved to Firestore for user ${user.uid}');
 
@@ -230,7 +279,9 @@ class NotificationService {
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .update({'fcmToken': newToken});
+          .update({
+        'fcmTokens': FieldValue.arrayUnion([newToken])
+      });
       debugPrint('[FCM] Token refreshed and saved.');
     });
   }
@@ -240,10 +291,15 @@ class NotificationService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .update({'fcmToken': FieldValue.delete()});
+    final token = await getToken();
+    if (token != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'fcmTokens': FieldValue.arrayRemove([token])
+      });
+    }
 
     // Also delete device token from FCM so no more messages are sent here
     if (Platform.isAndroid) {

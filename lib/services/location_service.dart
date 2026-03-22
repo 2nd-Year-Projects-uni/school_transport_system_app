@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:geolocator/geolocator.dart';
+import 'notification_service.dart';
 
 class LocationService {
   static const String _databaseUrl =
@@ -58,6 +59,8 @@ class LocationService {
       ...metadata,
       'updatedAt': ServerValue.timestamp,
     });
+
+    NotificationService.instance.showOngoingJourneyNotification();
   }
 
   Future<void> markJourneyEnded() async {
@@ -90,6 +93,8 @@ class LocationService {
       });
     } catch (_) {
       // Ignore cleanup failures.
+    } finally {
+      NotificationService.instance.endOngoingJourneyNotification();
     }
   }
 
@@ -217,6 +222,8 @@ class LocationService {
           });
         } catch (_) {
           // Ignore RTDB cleanup failures.
+        } finally {
+          NotificationService.instance.endOngoingJourneyNotification();
         }
       }
     }

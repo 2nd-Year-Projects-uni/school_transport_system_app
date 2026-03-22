@@ -11,6 +11,8 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Future<UserCredential> signUp({
+    required String fullName,
+    required String contactNumber,
     required String email,
     required String password,
   }) async {
@@ -21,7 +23,13 @@ class AuthService {
     await FirebaseFirestore.instance
         .collection('users')
         .doc(userCredential.user!.uid)
-        .set({'email': email.trim(), 'userType': 'parent'});
+        .set({
+          'name': fullName.trim(),
+          'phone': contactNumber.trim(),
+          'email': email.trim(),
+          'userType': 'parent',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
     return userCredential;
   }
 

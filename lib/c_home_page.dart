@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'd_info_child.dart';
+import 'pay.dart';
 
 class HomeTab extends StatefulWidget {
   final String childId;
@@ -183,8 +184,22 @@ class _HomeTabState extends State<HomeTab> {
 
         if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
           final data = Map<String, dynamic>.from(snapshot.data!.snapshot.value as Map);
-          final journeyStatus = data['journeyStatus']?.toString() ?? 'waiting';
+          String journeyStatus = data['journeyStatus']?.toString() ?? 'waiting';
           final journeyMode = data['journeyMode']?.toString() ?? 'morning';
+
+          // Auto-reset logic: check if the trip was updated today
+          final updatedAtRaw = data['updatedAt'];
+          if (updatedAtRaw is int) {
+            final updatedDate = DateTime.fromMillisecondsSinceEpoch(updatedAtRaw);
+            final now = DateTime.now();
+            final isSameDay = updatedDate.year == now.year &&
+                updatedDate.month == now.month &&
+                updatedDate.day == now.day;
+
+            if (!isSameDay) {
+              journeyStatus = 'waiting';
+            }
+          }
 
           tripTitle = journeyMode == 'morning' ? 'Morning Trip' : 'Afternoon Trip';
           isLive = journeyStatus == 'in_progress';
@@ -596,8 +611,14 @@ class _HomeTabState extends State<HomeTab> {
               label: 'Fee Status',
               color: const Color(0xFFF39C12),
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Fee Module coming soon!')),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PayPage(
+                      childId: widget.childId,
+                      childName: widget.childName,
+                    ),
+                  ),
                 );
               },
             ),
@@ -873,60 +894,185 @@ class _HomeTabState extends State<HomeTab> {
           ),
         ),
         const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: navy.withOpacity(0.08)),
-            boxShadow: [
-              BoxShadow(
-                color: navy.withOpacity(0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F8FC),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.notifications_active_rounded, color: blue, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'No new notices',
-                      style: TextStyle(
-                        color: navy,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
+        _vanId.isEmpty
+            ? _buildNoNoticeCard('No vehicle assigned yet.')
+            : StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('d_notices')
+                    .where('vanId', isEqualTo: _vanId)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: navy.withOpacity(0.08)),
                       ),
+                      child: const Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  final docs = snapshot.data?.docs ?? [];
+
+                  if (docs.isEmpty) {
+                    return _buildNoNoticeCard('No new notices from your driver today.');
+                  }
+
+                  // Sort locally to get the latest notice
+                  final sorted = docs.toList()
+                    ..sort((a, b) {
+                      final tA = (a.data() as Map)['timestamp'] as Timestamp?;
+                      final tB = (b.data() as Map)['timestamp'] as Timestamp?;
+                      if (tA == null) return 1;
+                      if (tB == null) return -1;
+                      return tB.compareTo(tA);
+                    });
+
+                  final latest = sorted.first.data() as Map<String, dynamic>;
+                  final message = latest['message']?.toString() ?? '';
+                  final ts = latest['timestamp'] as Timestamp?;
+                  final timeStr = ts != null
+                      ? TimeOfDay.fromDateTime(ts.toDate()).format(context)
+                      : '';
+
+                  return Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: teal.withOpacity(0.25)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: teal.withOpacity(0.07),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'You will see the latest updates from the driver or admin here.',
-                      style: TextStyle(
-                        color: navy.withOpacity(0.6),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: teal.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.campaign_rounded, color: teal, size: 24),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Driver Notice',
+                                    style: TextStyle(
+                                      color: navy,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  Text(
+                                    timeStr,
+                                    style: TextStyle(
+                                      color: navy.withOpacity(0.45),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                message,
+                                style: TextStyle(
+                                  color: navy.withOpacity(0.8),
+                                  fontSize: 14,
+                                  height: 1.4,
+                                ),
+                              ),
+                              if (docs.length > 1) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  '+ ${docs.length - 1} more notice${docs.length - 1 > 1 ? 's' : ''} today',
+                                  style: TextStyle(
+                                    color: teal,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
-            ],
-          ),
-        ),
       ],
+    );
+  }
+
+  Widget _buildNoNoticeCard(String message) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: navy.withOpacity(0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: navy.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F8FC),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.notifications_active_rounded, color: blue, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'No new notices',
+                  style: TextStyle(
+                    color: navy,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: TextStyle(
+                    color: navy.withOpacity(0.6),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

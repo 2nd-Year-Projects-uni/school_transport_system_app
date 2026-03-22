@@ -50,11 +50,11 @@ class WelcomeActionContent extends StatelessWidget {
             Positioned(
               left: 0,
               right: 0,
-              bottom: 0,
+              bottom: 40,
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
-                  vertical: 24,
+                  vertical: 0,
                 ),
                 child: Image.asset(
                   secondWelcomeImagePath,

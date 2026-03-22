@@ -33,20 +33,20 @@ class VehicleOwnerHomePage extends StatefulWidget {
 class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
     with SingleTickerProviderStateMixin {
   final VehicleService _vehicleService = VehicleService();
-  late final AnimationController _fabHighlightController;
+  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
-    _fabHighlightController = AnimationController(
+    _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2600),
+      duration: const Duration(milliseconds: 3500),
     )..repeat();
   }
 
   @override
   void dispose() {
-    _fabHighlightController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -345,77 +345,69 @@ class _VehicleOwnerHomePageState extends State<VehicleOwnerHomePage>
                   },
                 ),
           floatingActionButton: AnimatedBuilder(
-            animation: _fabHighlightController,
+            animation: _pulseController,
             builder: (context, child) {
-              final double phase = _fabHighlightController.value;
-
-              final Widget fab = FloatingActionButton(
-                onPressed: _openVehicleRegistrationPage,
-                tooltip: 'Add Vehicle',
-                backgroundColor: teal,
-                elevation: 0,
-                highlightElevation: 0,
-                shape: const CircleBorder(),
-                clipBehavior: Clip.antiAlias,
-                foregroundColor: Colors.white,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.center,
-                  children: [
-                    const Icon(Icons.directions_bus_filled, size: 24),
-                    Positioned(
-                      right: -5,
-                      top: -5,
-                      child: CircleAvatar(
-                        radius: 8,
-                        backgroundColor: Colors.white,
-                        child: Icon(Icons.add, size: 12, color: navy),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-
-              final double ring1T = phase;
-              final double ring2T = (phase + 0.38) % 1.0;
-
-              Widget buildPulseRing(double t, {required double maxOpacity}) {
-                final double scale = 1.0 + (t * 1.1);
-                final double opacity = maxOpacity * (1.0 - t);
-                final double strokeWidth = 2.6 - (t * 1.5);
-
-                return Transform.scale(
-                  scale: scale,
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: teal.withOpacity(opacity),
-                        width: strokeWidth.clamp(1.0, 2.6),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: teal.withOpacity(opacity * 0.35),
-                          blurRadius: 10,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
+              final double t = _pulseController.value;
+              final double scale = 1.0 + (t * 0.7);
+              final double opacity = 0.28 * (1.0 - t);
 
               return SizedBox(
                 width: 90,
                 height: 90,
                 child: Stack(
+                  clipBehavior: Clip.none,
                   alignment: Alignment.center,
                   children: [
-                    buildPulseRing(ring1T, maxOpacity: 0.34),
-                    buildPulseRing(ring2T, maxOpacity: 0.22),
-                    fab,
+                    // Single gentle pulse ring
+                    Transform.scale(
+                      scale: scale,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: teal.withOpacity(opacity),
+                            width: 2.0,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // FAB with badge
+                    Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.center,
+                      children: [
+                        FloatingActionButton(
+                          onPressed: _openVehicleRegistrationPage,
+                          tooltip: 'Add Vehicle',
+                          backgroundColor: teal,
+                          elevation: 4,
+                          shape: const CircleBorder(),
+                          foregroundColor: Colors.white,
+                          child: const Icon(
+                            Icons.directions_bus_filled,
+                            size: 26,
+                          ),
+                        ),
+                        Positioned(
+                          right: 4,
+                          top: 4,
+                          child: Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: teal, width: 1.5),
+                            ),
+                            child: Center(
+                              child: Icon(Icons.add, size: 12, color: navy),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               );

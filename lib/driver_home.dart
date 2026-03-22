@@ -4,6 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'services/location_service.dart';
+import 'driver_students_page.dart';
+import 'driver_notices_page.dart';
+import 'driver_payments_page.dart';
 
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({Key? key}) : super(key: key);
@@ -511,9 +514,23 @@ class _DriverHomePageState extends State<DriverHomePage> {
   }
 
   void _onQuickActionTap(String label) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$label section coming soon.')));
+    if (label == 'Students') {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const DriverStudentsPage()),
+      );
+    } else if (label == 'Notices') {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const DriverNoticesPage()),
+      );
+    } else if (label == 'Payments') {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const DriverPaymentsPage()),
+      );
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$label section coming soon.')));
+    }
   }
 
   Widget _buildQuickActionTile({

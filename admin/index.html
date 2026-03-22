@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - School Van App</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        .error-msg {
+            color: #EF4444;
+            font-size: 14px;
+            font-weight: 500;
+            display: none;
+            background: #FEF2F2;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid #FECACA;
+            margin-top: -5px;
+        }
+        .subtitle {
+            color: #6B7280;
+            font-size: 15px;
+            margin-top: -20px;
+            margin-bottom: 25px;
+        }
+        .success-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #ECFDF5;
+            color: #059669;
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 600;
+            border: 1px solid #A7F3D0;
+            margin: 0 auto 15px auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container premium">
+        <h1><span class="logo-icon"><i class="fa-solid fa-shield-halved"></i></span></h1>
+        
+        <!-- Loading State -->
+        <p id="loadingState" style="color: #6B7280; font-size: 1.1rem; font-weight: 500;">
+            <i class="fa-solid fa-circle-notch fa-spin"></i> Authenticating...
+        </p>
+
+        <!-- Login Form -->
+        <div id="loginForm" class="login-section" style="display: none;">
+            <p class="subtitle">Secure Administrator Portal</p>
+            <input type="email" id="emailInput" class="login-input" placeholder="Admin Email" />
+            <input type="password" id="passwordInput" class="login-input" placeholder="Secure Password" />
+            <p id="errorMsg" class="error-msg">Invalid email or password.</p>
+            <button id="loginSubmitBtn" class="login-btn"><i class="fa-solid fa-right-to-bracket"></i> Access Portal</button>
+        </div>
+
+        <!-- Dashboard Selection (Hidden until logged in) -->
+        <div id="dashboardSection" class="selection" style="display: none;">
+            <div class="success-badge"><i class="fa-solid fa-lock-open"></i> Authentication Verified</div>
+            
+            <button id="driversBtn" class="select-btn">
+                <span class="icon"><i class="fa-solid fa-user-tie"></i></span>
+                <span class="label">Manage Drivers</span>
+            </button>
+            <button id="vehiclesBtn" class="select-btn">
+                <span class="icon"><i class="fa-solid fa-shuttle-van"></i></span>
+                <span class="label">Manage Vehicles</span>
+            </button>
+            
+            <!-- Hidden by default, only shown if SuperAdmin -->
+            <button id="showCreateAdminBtn" class="select-btn" style="display: none;">
+                <span class="icon"><i class="fa-solid fa-user-plus"></i></span>
+                <span class="label">Register New Admin</span>
+            </button>
+
+            <button id="logoutBtn" class="logout-btn"><i class="fa-solid fa-power-off"></i> Disconnect</button>
+        </div>
+
+        <!-- Create Admin Form (Hidden until button clicked) -->
+        <div id="createAdminForm" class="login-section" style="display: none;">
+            <p class="subtitle" style="color: #005792; font-weight: 600;">SuperAdmin Privilege</p>
+            <button id="backToDashBtn" class="logout-btn" style="margin-top: 0; outline: none; border-color: #E5E7EB; color: #4B5563;"><i class="fa-solid fa-arrow-left"></i> Back</button>
+            <input type="email" id="newAdminEmail" class="login-input" placeholder="New Admin Email" />
+            <input type="password" id="newAdminPassword" class="login-input" placeholder="New Password" />
+            <p id="createAdminMsg" class="error-msg"></p>
+            <button id="submitNewAdminBtn" class="login-btn"><i class="fa-solid fa-plus"></i> Create Admin Account</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK Compat -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        // Use Firebase config
+        const firebaseConfig = {
+            apiKey: "***REMOVED***",
+            authDomain: "school-transport-system-6eb9f.firebaseapp.com",
+            projectId: "school-transport-system-6eb9f",
+            storageBucket: "school-transport-system-6eb9f.firebasestorage.app",
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // Create secondary app globally to avoid multiple initialization errors
+        const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
+        const secondaryAuth = secondaryApp.auth();
+
+        const loadingState = document.getElementById('loadingState');
+        const loginForm = document.getElementById('loginForm');
+        const dashboardSection = document.getElementById('dashboardSection');
+        const errorMsg = document.getElementById('errorMsg');
+        const showCreateAdminBtn = document.getElementById('showCreateAdminBtn');
+        const createAdminForm = document.getElementById('createAdminForm');
+        const createAdminMsg = document.getElementById('createAdminMsg');
+
+        // Track Auth State globally
+        auth.onAuthStateChanged(async (user) => {
+            loadingState.style.display = 'none';
+            if (user) {
+                // Logged in!
+                loginForm.style.display = 'none';
+                createAdminForm.style.display = 'none';
+                dashboardSection.style.display = 'flex';
+                document.querySelector('h1').innerHTML = '<span class="logo-icon"><i class="fa-solid fa-school"></i></span> Portal Access';
+
+                // Check if user is incredibly powerful SuperAdmin
+                try {
+                    const docInfo = await db.collection('superadmins').doc(user.uid).get();
+                    if (docInfo.exists) {
+                        showCreateAdminBtn.style.display = 'flex'; // Unlock feature!
+                    }
+                } catch(err) {
+                    console.log("Not a superadmin, hiding feature.");
+                }
+            } else {
+                // Not logged in
+                dashboardSection.style.display = 'none';
+                createAdminForm.style.display = 'none';
+                loginForm.style.display = 'flex';
+                showCreateAdminBtn.style.display = 'none';
+                document.querySelector('h1').innerHTML = '<span class="logo-icon"><i class="fa-solid fa-shield-halved"></i></span> System Auth';
+            }
+        });
+
+        // Handle Login button
+        document.getElementById('loginSubmitBtn').onclick = () => {
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            errorMsg.style.display = 'none';
+
+            auth.signInWithEmailAndPassword(email, password)
+                .catch((error) => {
+                    errorMsg.textContent = error.message;
+                    errorMsg.style.display = 'block';
+                });
+        };
+
+        // Navigation for creating Admins
+        showCreateAdminBtn.onclick = () => {
+            dashboardSection.style.display = 'none';
+            createAdminForm.style.display = 'flex';
+            document.querySelector('h1').innerHTML = '<span class="logo-icon"><i class="fa-solid fa-crown"></i></span> Add Admin';
+        };
+
+        document.getElementById('backToDashBtn').onclick = () => {
+            createAdminForm.style.display = 'none';
+            dashboardSection.style.display = 'flex';
+            document.querySelector('h1').innerHTML = '<span class="logo-icon"><i class="fa-solid fa-school"></i></span> Portal Access';
+        };
+
+        // Submit New Admin Using Secondary App Setup (Prevents Logout!)
+        document.getElementById('submitNewAdminBtn').onclick = async () => {
+            const email = document.getElementById('newAdminEmail').value;
+            const password = document.getElementById('newAdminPassword').value;
+            createAdminMsg.style.display = 'none';
+
+            if(!email || !password) {
+                createAdminMsg.textContent = "Please fill out all fields.";
+                createAdminMsg.style.display = 'block';
+                createAdminMsg.style.background = '#FEF2F2';
+                createAdminMsg.style.color = '#EF4444';
+                return;
+            }
+
+            try {
+                const submitBtn = document.getElementById('submitNewAdminBtn');
+                submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Creating...';
+                submitBtn.disabled = true;
+
+                // Create user using Secondary App instance (so current admin stays logged in!)
+                const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+                const newUserId = userCredential.user.uid;
+
+                // Save to 'admins' collection using primary DB (which has SuperAdmin credentials!)
+                await db.collection('admins').doc(newUserId).set({
+                    email: email,
+                    role: 'admin',
+                    createdBy: auth.currentUser.uid,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                // Instantly sign out the secondary app
+                await secondaryAuth.signOut();
+
+                // Success Message
+                createAdminMsg.textContent = "Admin account successfully created & stored in database!";
+                createAdminMsg.style.display = 'block';
+                createAdminMsg.style.background = '#ECFDF5';
+                createAdminMsg.style.border = '1px solid #A7F3D0';
+                createAdminMsg.style.color = '#059669';
+
+                // Clear fields
+                document.getElementById('newAdminEmail').value = '';
+                document.getElementById('newAdminPassword').value = '';
+
+                // Restore button
+                submitBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Create Admin Account';
+                submitBtn.disabled = false;
+
+            } catch (error) {
+                createAdminMsg.textContent = error.message;
+                createAdminMsg.style.display = 'block';
+                createAdminMsg.style.background = '#FEF2F2';
+                createAdminMsg.style.color = '#EF4444';
+                
+                document.getElementById('submitNewAdminBtn').innerHTML = '<i class="fa-solid fa-plus"></i> Create Admin Account';
+                document.getElementById('submitNewAdminBtn').disabled = false;
+            }
+        };
+
+        // Handle Logout
+        document.getElementById('logoutBtn').onclick = () => {
+            auth.signOut();
+        };
+
+        // Navigation (Old scripts combined here)
+        document.getElementById('driversBtn').onclick = () => {
+            window.location.href = 'drivers.html';
+        };
+        document.getElementById('vehiclesBtn').onclick = () => {
+            window.location.href = 'vehicles.html';
+        };
+    </script>
+</body>
+</html>

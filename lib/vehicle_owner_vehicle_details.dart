@@ -90,7 +90,7 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
     Future<List<_PlaceSuggestion>> _fetchPlaceSuggestions(String query) async {
       final String _googleMapsApiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
       final String trimmedQuery = query.trim();
-      if (_googlePlacesApiKey.isEmpty || trimmedQuery.length < 2) {
+      if (_googleMapsApiKey.isEmpty || trimmedQuery.length < 2) {
         return [];
       }
       try {
@@ -108,7 +108,7 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
           newApiUri,
           headers: <String, String>{
             'Content-Type': 'application/json',
-            'X-Goog-Api-Key': _googlePlacesApiKey,
+            'X-Goog-Api-Key': _googleMapsApiKey,
             'X-Goog-FieldMask':
                 'suggestions.placePrediction.place,suggestions.placePrediction.text.text',
           },
@@ -151,7 +151,7 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
         '/maps/api/place/autocomplete/json',
         {
           'input': trimmedQuery,
-          'key': _googlePlacesApiKey,
+          'key': _googleMapsApiKey,
           'types': 'geocode',
           'components': 'country:lk',
           'region': 'lk',
@@ -183,12 +183,9 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
     }
 
     Future<Map<String, double>?> _fetchPlaceCoordinates(String placeId) async {
-      const String _googlePlacesApiKey = String.fromEnvironment(
-        'GOOGLE_PLACES_API_KEY',
-        defaultValue: '***REMOVED***',
-      );
+      final String _googleMapsApiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
       final String trimmedPlaceId = placeId.trim();
-      if (_googlePlacesApiKey.isEmpty || trimmedPlaceId.isEmpty) {
+      if (_googleMapsApiKey.isEmpty || trimmedPlaceId.isEmpty) {
         return null;
       }
 
@@ -200,7 +197,7 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
         final http.Response newApiResponse = await http.get(
           newApiUri,
           headers: <String, String>{
-            'X-Goog-Api-Key': _googlePlacesApiKey,
+            'X-Goog-Api-Key': _googleMapsApiKey,
             'X-Goog-FieldMask': 'location',
           },
         );
@@ -230,7 +227,7 @@ class VehicleOwnerVehicleDetailsPage extends StatelessWidget {
           <String, String>{
             'place_id': trimmedPlaceId,
             'fields': 'geometry/location',
-            'key': _googlePlacesApiKey,
+            'key': _googleMapsApiKey,
           },
         );
         final http.Response legacyResponse = await http.get(legacyUri);

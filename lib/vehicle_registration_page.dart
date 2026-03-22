@@ -216,7 +216,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
     required bool schoolSearch,
   }) async {
     final String trimmedQuery = query.trim();
-    if (_googlePlacesApiKey.isEmpty || trimmedQuery.length < 2) {
+    if (_googleMapsApiKey.isEmpty || trimmedQuery.length < 2) {
       return [];
     }
 
@@ -240,7 +240,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
         newApiUri,
         headers: <String, String>{
           'Content-Type': 'application/json',
-          'X-Goog-Api-Key': _googlePlacesApiKey,
+          'X-Goog-Api-Key': _googleMapsApiKey,
           'X-Goog-FieldMask':
               'suggestions.placePrediction.place,suggestions.placePrediction.text.text',
         },
@@ -290,7 +290,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
     final Uri legacyUri =
         Uri.https('maps.googleapis.com', '/maps/api/place/autocomplete/json', {
           'input': trimmedQuery,
-          'key': _googlePlacesApiKey,
+          'key': _googleMapsApiKey,
           'types': schoolSearch ? 'establishment' : 'geocode',
           'components': 'country:lk',
           'region': 'lk',
@@ -325,7 +325,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
 
   Future<Map<String, double>?> _fetchPlaceCoordinates(String placeId) async {
     final String trimmedPlaceId = placeId.trim();
-    if (_googlePlacesApiKey.isEmpty || trimmedPlaceId.isEmpty) {
+    if (_googleMapsApiKey.isEmpty || trimmedPlaceId.isEmpty) {
       return null;
     }
 
@@ -337,7 +337,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
       final http.Response newApiResponse = await http.get(
         newApiUri,
         headers: <String, String>{
-          'X-Goog-Api-Key': _googlePlacesApiKey,
+          'X-Goog-Api-Key': _googleMapsApiKey,
           'X-Goog-FieldMask': 'location',
         },
       );
@@ -363,7 +363,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
         <String, String>{
           'place_id': trimmedPlaceId,
           'fields': 'geometry/location',
-          'key': _googlePlacesApiKey,
+          'key': _googleMapsApiKey,
         },
       );
       final http.Response legacyResponse = await http.get(legacyUri);

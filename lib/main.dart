@@ -6,12 +6,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'login.dart';
 import 'admin/admin_login.dart';
+import 'admin/superadmin_login.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(MyApp());
 }
 
@@ -21,7 +20,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'School Van App',
       debugShowCheckedModeBanner: false,
-      home: kIsWeb ? AdminLoginPage() : LoginPage(),
+      home: kIsWeb ? SuperAdminLogin() : LoginPage(),
     );
   }
 }

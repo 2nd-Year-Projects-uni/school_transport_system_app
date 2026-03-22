@@ -900,6 +900,7 @@ class _HomeTabState extends State<HomeTab> {
                 stream: FirebaseFirestore.instance
                     .collection('d_notices')
                     .where('vanId', isEqualTo: _vanId)
+                    .where('childId', whereIn: ['all', widget.childId])
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {

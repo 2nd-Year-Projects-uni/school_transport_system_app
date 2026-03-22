@@ -68,6 +68,7 @@ class _DashboardPageState extends State<DashboardPage> {
       _noticesSubscription = FirebaseFirestore.instance
           .collection('d_notices')
           .where('vanId', isEqualTo: vanId)
+          .where('childId', whereIn: ['all', widget.childId])
           .snapshots()
           .listen((snapshot) {
             
@@ -340,6 +341,7 @@ class _NoticesTabState extends State<NoticesTab> {
               stream: FirebaseFirestore.instance
                   .collection('d_notices')
                   .where('vanId', isEqualTo: _vanId)
+                  .where('childId', whereIn: ['all', widget.childId])
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {

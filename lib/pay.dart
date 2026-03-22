@@ -35,7 +35,7 @@ class _PayPageState extends State<PayPage> {
     return '${months[now.month]} ${now.year}';
   }
 
-  Future<void> _pickAndUploadSlip() async {
+  Future<void> _pickAndUploadSlip(String vanId) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
       source: ImageSource.gallery,
@@ -64,6 +64,22 @@ class _PayPageState extends State<PayPage> {
         'receiptDate': FieldValue.serverTimestamp(),
         'receiptNote': 'Bank Slip Uploaded',
       });
+
+      if (vanId.isNotEmpty) {
+        final now = DateTime.now();
+        final dateKey = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+        
+        await FirebaseFirestore.instance.collection('notices').add({
+          'vanId': vanId,
+          'sender': 'parent',
+          'childId': widget.childId,
+          'childName': widget.childName,
+          'message': 'Has uploaded a new bank slip for the monthly fee.',
+          'dateKey': dateKey,
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -176,7 +192,7 @@ class _PayPageState extends State<PayPage> {
                 const SizedBox(height: 24),
                 _buildPaymentCard(feeAmount, status, receiptUrl),
                 const SizedBox(height: 30),
-                if (status != 'paid') _buildUploadSection(receiptUrl),
+                if (status != 'paid') _buildUploadSection(receiptUrl, vanId),
                 if (status == 'paid') _buildReceiptSection(receiptUrl, isPaid: true),
               ],
             ),
@@ -325,7 +341,7 @@ class _PayPageState extends State<PayPage> {
     );
   }
 
-  Widget _buildUploadSection(String receiptUrl) {
+  Widget _buildUploadSection(String receiptUrl, String vanId) {
     final hasReceipt = receiptUrl.isNotEmpty;
 
     return Column(
@@ -355,7 +371,7 @@ class _PayPageState extends State<PayPage> {
           ),
         const SizedBox(height: 20),
         ElevatedButton.icon(
-          onPressed: _isUploading ? null : _pickAndUploadSlip,
+          onPressed: _isUploading ? null : () => _pickAndUploadSlip(vanId),
           icon: _isUploading 
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
               : Icon(hasReceipt ? Icons.cloud_upload_rounded : Icons.upload_file_rounded, size: 22),

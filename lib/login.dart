@@ -4,6 +4,7 @@ import 'signup.dart';
 import 'driver_login.dart';
 import 'vehicle_owner_login.dart';
 import 'services/auth_service.dart';
+import 'services/notification_service.dart';
 import 'home_screen.dart';
 import 'widgets/loading_button.dart';
 
@@ -29,6 +30,8 @@ class _LoginPageState extends State<LoginPage> {
         email: emailController.text,
         password: passwordController.text,
       );
+      await NotificationService.instance.saveTokenToFirestore();
+      await NotificationService.instance.subscribeToUserTopic('parent');
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -125,7 +128,6 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final Color offWhite = const Color(0xFFF6F7FB);
     final Color navy = const Color(0xFF001F3F);
     final Color blue = const Color(0xFF005792);
     final Color teal = const Color(0xFF00B894);

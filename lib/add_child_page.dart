@@ -7,8 +7,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 
-enum _PickupSelectionMode { interactiveMap, quickCurrentLocation }
-
 class AddChildPage extends StatefulWidget {
   const AddChildPage({super.key});
 
@@ -26,8 +24,8 @@ class _AddChildPageState extends State<AddChildPage> {
   bool _fetchingCurrentLocation = false;
   bool _resolvingPickupPlace = false;
   LatLng? selectedLocation;
+  String? _selectedSchool;
   GoogleMapController? mapController;
-  _PickupSelectionMode _pickupMode = _PickupSelectionMode.quickCurrentLocation;
 
   final String parentId = FirebaseAuth.instance.currentUser!.uid;
 
@@ -281,11 +279,30 @@ class _AddChildPageState extends State<AddChildPage> {
   }
 
   void _onSchoolChanged(String value) {
+    if (mounted) {
+      setState(() {
+        _selectedSchool = null;
+        if (value.trim().isEmpty) {
+          _schoolSuggestions = [];
+        }
+      });
+    }
+
     _schoolSearchTimer?.cancel();
+    if (value.trim().isEmpty) return;
+
     _schoolSearchTimer = Timer(const Duration(milliseconds: 350), () async {
       final suggestions = await _fetchSchoolSuggestions(value);
       if (!mounted) return;
       setState(() => _schoolSuggestions = suggestions);
+    });
+  }
+
+  void _clearSchoolInput() {
+    setState(() {
+      schoolController.clear();
+      _selectedSchool = null;
+      _schoolSuggestions = [];
     });
   }
 
@@ -306,6 +323,11 @@ class _AddChildPageState extends State<AddChildPage> {
       if (!mounted) return;
       setState(() => _pickupSuggestions = suggestions);
     });
+  }
+
+  void _clearPickupSearchInput() {
+    pickupSearchController.clear();
+    _pickupSuggestions = [];
   }
 
   Future<void> _selectPickupSuggestion(_PlaceSuggestion suggestion) async {
@@ -364,7 +386,10 @@ class _AddChildPageState extends State<AddChildPage> {
     );
 
     if (!mounted || pickedLocation == null) return;
-    setState(() => selectedLocation = pickedLocation);
+    setState(() {
+      selectedLocation = pickedLocation;
+      _clearPickupSearchInput();
+    });
 
     if (mapController != null) {
       unawaited(
@@ -409,7 +434,16 @@ class _AddChildPageState extends State<AddChildPage> {
       if (!mounted) return;
       setState(() {
         selectedLocation = LatLng(position.latitude, position.longitude);
+        _clearPickupSearchInput();
       });
+
+      if (mapController != null) {
+        unawaited(
+          mapController!.animateCamera(
+            CameraUpdate.newLatLngZoom(selectedLocation!, 16),
+          ),
+        );
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Current location selected")),
@@ -425,10 +459,17 @@ class _AddChildPageState extends State<AddChildPage> {
   }
 
   Future<void> saveStudent() async {
-    if (nameController.text.isEmpty || schoolController.text.isEmpty) {
+    if (nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("Please fill all fields")));
+      ).showSnackBar(const SnackBar(content: Text("Please enter a child name")));
+      return;
+    }
+
+    if (_selectedSchool == null || _selectedSchool != schoolController.text.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a valid school from the dropdown suggestions")),
+      );
       return;
     }
 
@@ -500,7 +541,6 @@ class _AddChildPageState extends State<AddChildPage> {
     const Color navy = Color(0xFF001F3F);
     const Color blue = Color(0xFF005792);
     const Color teal = Color(0xFF00B894);
-    const Color offWhite = Color(0xFFF6F7FB);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -562,7 +602,14 @@ class _AddChildPageState extends State<AddChildPage> {
               children: [
                 TextField(
                   controller: schoolController,
-                  decoration: _inputDecoration('School', Icons.school_outlined),
+                  decoration: _inputDecoration('School', Icons.school_outlined).copyWith(
+                    suffixIcon: schoolController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close, color: Colors.grey),
+                            onPressed: _clearSchoolInput,
+                          )
+                        : null,
+                  ),
                   onChanged: _onSchoolChanged,
                 ),
                 if (_schoolSuggestions.isNotEmpty)
@@ -601,6 +648,7 @@ class _AddChildPageState extends State<AddChildPage> {
                           ),
                           onTap: () {
                             setState(() {
+                              _selectedSchool = suggestion.description;
                               schoolController.text = suggestion.description;
                               _schoolSuggestions = [];
                             });
@@ -701,54 +749,6 @@ class _AddChildPageState extends State<AddChildPage> {
 
             const SizedBox(height: 10),
 
-            Wrap(
-              spacing: 8,
-              children: [
-                ChoiceChip(
-                  label: const Text("Quick (GPS)"),
-                  labelStyle: TextStyle(
-                    color:
-                        _pickupMode == _PickupSelectionMode.quickCurrentLocation
-                        ? navy
-                        : blue,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  selected:
-                      _pickupMode == _PickupSelectionMode.quickCurrentLocation,
-                  selectedColor: teal.withOpacity(0.18),
-                  side: BorderSide(color: blue.withOpacity(0.35)),
-                  backgroundColor: offWhite,
-                  onSelected: (selected) {
-                    if (!selected) return;
-                    setState(
-                      () => _pickupMode =
-                          _PickupSelectionMode.quickCurrentLocation,
-                    );
-                  },
-                ),
-                ChoiceChip(
-                  label: const Text("Map (Manual)"),
-                  labelStyle: TextStyle(
-                    color: _pickupMode == _PickupSelectionMode.interactiveMap
-                        ? navy
-                        : blue,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  selected: _pickupMode == _PickupSelectionMode.interactiveMap,
-                  selectedColor: teal.withOpacity(0.18),
-                  side: BorderSide(color: blue.withOpacity(0.35)),
-                  backgroundColor: offWhite,
-                  onSelected: (selected) {
-                    if (!selected) return;
-                    setState(
-                      () => _pickupMode = _PickupSelectionMode.interactiveMap,
-                    );
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -771,154 +771,123 @@ class _AddChildPageState extends State<AddChildPage> {
             ),
             const SizedBox(height: 10),
 
-            if (_pickupMode == _PickupSelectionMode.interactiveMap)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(
-                  height: 300,
-                  child: Stack(
-                    children: [
-                      GoogleMap(
-                        initialCameraPosition: _initialPosition,
-                        onMapCreated: (controller) {
-                          mapController = controller;
-                          if (mounted) {
-                            setState(() => mapReady = true);
-                          }
-                        },
-                        onTap: mapReady
-                            ? (LatLng position) {
-                                if (mounted) {
-                                  setState(() => selectedLocation = position);
-                                }
-                              }
-                            : null,
-                        markers: selectedLocation != null
-                            ? {
-                                Marker(
-                                  markerId: const MarkerId('pickup'),
-                                  position: selectedLocation!,
-                                  icon: BitmapDescriptor.defaultMarkerWithHue(
-                                    BitmapDescriptor.hueBlue,
-                                  ),
-                                  infoWindow: const InfoWindow(
-                                    title: "Pickup Point",
-                                  ),
-                                ),
-                              }
-                            : {},
-                        myLocationButtonEnabled: false,
-                        zoomControlsEnabled: true,
-                        scrollGesturesEnabled: true,
-                        zoomGesturesEnabled: true,
-                        rotateGesturesEnabled: false,
-                        tiltGesturesEnabled: false,
-                      ),
-
-                      // Loading overlay until map is ready
-                      if (!mapReady)
-                        Container(
-                          color: Colors.white,
-                          child: const Center(
-                            child: CircularProgressIndicator(
-                              color: Color(0xFF005792),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  border: Border.all(color: blue.withOpacity(0.25)),
-                  borderRadius: BorderRadius.circular(16),
-                  color: offWhite,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: 300,
+                child: Stack(
                   children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.gps_fixed, color: blue, size: 18),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            "Use your current phone location",
-                            style: TextStyle(
-                              color: blue,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _fetchingCurrentLocation
-                            ? null
-                            : _setCurrentLocation,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: navy,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          minimumSize: const Size(double.infinity, 50),
-                        ),
-                        icon: _fetchingCurrentLocation
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                    GoogleMap(
+                      initialCameraPosition: _initialPosition,
+                      onMapCreated: (controller) {
+                        mapController = controller;
+                        if (mounted) {
+                          setState(() => mapReady = true);
+                        }
+                      },
+                      onTap: mapReady
+                          ? (LatLng position) {
+                              if (mounted) {
+                                setState(() {
+                                  selectedLocation = position;
+                                  _clearPickupSearchInput();
+                                });
+                              }
+                            }
+                          : null,
+                      markers: selectedLocation != null
+                          ? {
+                              Marker(
+                                markerId: const MarkerId('pickup'),
+                                position: selectedLocation!,
+                                icon: BitmapDescriptor.defaultMarkerWithHue(
+                                  BitmapDescriptor.hueBlue,
                                 ),
-                              )
-                            : const Icon(Icons.my_location),
-                        label: Text(
-                          selectedLocation == null
-                              ? "Use Current Location"
-                              : "Refresh Current Location",
+                                infoWindow: const InfoWindow(
+                                  title: "Pickup Point",
+                                ),
+                              ),
+                            }
+                          : {},
+                      myLocationButtonEnabled: false,
+                      zoomControlsEnabled: true,
+                      scrollGesturesEnabled: true,
+                      zoomGesturesEnabled: true,
+                      rotateGesturesEnabled: false,
+                      tiltGesturesEnabled: false,
+                    ),
+
+                    // Loading overlay until map is ready
+                    if (!mapReady)
+                      Container(
+                        color: Colors.white,
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF005792),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
+            ),
 
             // Show selected coordinates
-            if (selectedLocation != null) ...[
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: teal.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.location_on, color: navy, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "Lat: ${selectedLocation!.latitude.toStringAsFixed(5)}, "
-                        "Lng: ${selectedLocation!.longitude.toStringAsFixed(5)}",
-                        style: const TextStyle(color: navy, fontSize: 13),
-                      ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: teal.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.location_on, color: navy, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      selectedLocation == null
+                          ? "Lat: ---, Lng: ---"
+                          : "Lat: ${selectedLocation!.latitude.toStringAsFixed(5)}, "
+                                "Lng: ${selectedLocation!.longitude.toStringAsFixed(5)}",
+                      style: const TextStyle(color: navy, fontSize: 13),
                     ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _fetchingCurrentLocation
+                    ? null
+                    : _setCurrentLocation,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: navy,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                icon: _fetchingCurrentLocation
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.my_location),
+                label: Text(
+                  selectedLocation == null
+                      ? "Share Current Location"
+                      : "Refresh Current Location",
                 ),
               ),
-            ],
+            ),
 
             const SizedBox(height: 28),
 

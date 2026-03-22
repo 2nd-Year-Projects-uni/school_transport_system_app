@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'services/location_service.dart';
+import 'driver_students_page.dart';
+import 'driver_notices_page.dart';
+import 'driver_payments_page.dart';
+import 'dart:async';
+import 'services/notification_service.dart';
 
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({Key? key}) : super(key: key);
@@ -18,6 +25,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
   bool _isAssignedVehicleExpanded = false;
   bool _isJoinVehicleExpanded = false;
   bool _isLeaving = false;
+  bool _isOpeningJourney = false;
+  bool _isJourneyActive = false;
+  String _journeyMode = 'morning';
+
+  StreamSubscription<QuerySnapshot>? _parentNoticesSubscription;
+  bool _isFirstNoticeLoad = true;
+  final Set<String> _seenParentNoticeIds = {};
 
   String _placeName(dynamic place) {
     if (place is String) {
@@ -37,6 +51,250 @@ class _DriverHomePageState extends State<DriverHomePage> {
     return list.map(_placeName).where((name) => name.isNotEmpty).toList();
   }
 
+  List<_JourneyPoint> _extractJourneyPoints(
+    dynamic source,
+    String fallbackLabel,
+  ) {
+    final list = source as List<dynamic>? ?? const <dynamic>[];
+    final points = <_JourneyPoint>[];
+
+    for (final item in list) {
+      if (item is! Map) continue;
+      final lat = (item['latitude'] as num?)?.toDouble();
+      final lng = (item['longitude'] as num?)?.toDouble();
+      if (lat == null || lng == null) continue;
+      final name = _placeName(item);
+      points.add(
+        _JourneyPoint(
+          latitude: lat,
+          longitude: lng,
+          label: name.isNotEmpty ? name : fallbackLabel,
+        ),
+      );
+    }
+
+    return points;
+  }
+
+  _JourneyPoint? _extractStartingLocationPoint(Map<String, dynamic> data) {
+    final startingLocation = data['startingLocation'];
+    if (startingLocation is! Map) return null;
+
+    final lat = (startingLocation['latitude'] as num?)?.toDouble();
+    final lng = (startingLocation['longitude'] as num?)?.toDouble();
+    if (lat == null || lng == null) return null;
+
+    final name = _placeName(startingLocation);
+    return _JourneyPoint(
+      latitude: lat,
+      longitude: lng,
+      label: name.isNotEmpty ? name : 'Starting location',
+    );
+  }
+
+  _JourneyPlan? _resolveJourneyPlan() {
+    final data = _currentVehicleData;
+    if (data == null) return null;
+    final startingPoint = _extractStartingLocationPoint(data);
+
+    final schools = _extractJourneyPoints(data['schools'], 'School');
+    final routePoints = _extractJourneyPoints(
+      data['routePoints'],
+      'Checkpoint',
+    );
+
+    if (schools.isNotEmpty) {
+      final destination = schools.last;
+      final schoolStops = schools.take(schools.length - 1).toList();
+
+      final checkpointWaypoints = routePoints
+          .map((point) => _JourneyWaypoint(point: point, isCheckpoint: true))
+          .toList();
+
+      final schoolWaypoints = schoolStops
+          .map((point) => _JourneyWaypoint(point: point, isCheckpoint: false))
+          .toList();
+
+      final waypoints = [...checkpointWaypoints, ...schoolWaypoints];
+
+      final morningPlan = _JourneyPlan(
+        destination: destination,
+        waypoints: waypoints,
+      );
+
+      if (_journeyMode != 'afternoon') {
+        return morningPlan;
+      }
+
+      return _buildReversedPlan(morningPlan, endingPoint: startingPoint);
+    }
+
+    if (routePoints.isNotEmpty) {
+      final morningPlan = _JourneyPlan(
+        destination: routePoints.first,
+        waypoints: const [],
+      );
+      if (_journeyMode != 'afternoon') {
+        return morningPlan;
+      }
+      return _buildReversedPlan(morningPlan, endingPoint: startingPoint);
+    }
+
+    if (startingPoint != null) {
+      return _JourneyPlan(destination: startingPoint, waypoints: const []);
+    }
+
+    return null;
+  }
+
+  _JourneyPlan _buildReversedPlan(
+    _JourneyPlan morningPlan, {
+    _JourneyPoint? endingPoint,
+  }) {
+    final sequence = <_JourneyWaypoint>[
+      _JourneyWaypoint(point: morningPlan.destination, isCheckpoint: false),
+      ...morningPlan.waypoints.reversed,
+    ];
+
+    if (endingPoint == null && sequence.length <= 1) {
+      return morningPlan;
+    }
+
+    final reversedDestination = endingPoint ?? sequence.last.point;
+    final reversedWaypoints = endingPoint == null
+        ? sequence.take(sequence.length - 1).toList()
+        : sequence;
+
+    return _JourneyPlan(
+      destination: reversedDestination,
+      waypoints: reversedWaypoints,
+    );
+  }
+
+  Future<void> _startJourneyInGoogleMaps() async {
+    if (_isOpeningJourney || _isJourneyActive) return;
+
+    final plan = _resolveJourneyPlan();
+    if (plan == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No destination found for this vehicle yet.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isOpeningJourney = true);
+    try {
+      final vehicleId = _currentVehicleId;
+      if (vehicleId != null && vehicleId.isNotEmpty) {
+        final routeSnapshot = <Map<String, dynamic>>[
+          ...plan.waypoints.map(
+            (waypoint) => {
+              'latitude': waypoint.point.latitude,
+              'longitude': waypoint.point.longitude,
+              'label': waypoint.point.label,
+              'type': waypoint.isCheckpoint
+                  ? 'checkpoint'
+                  : (_journeyMode == 'afternoon' ? 'home_stop' : 'school_stop'),
+            },
+          ),
+          {
+            'latitude': plan.destination.latitude,
+            'longitude': plan.destination.longitude,
+            'label': plan.destination.label,
+            'type': 'destination',
+          },
+        ];
+
+        await _locationService.publishJourneyMetadata(
+          vehicleId: vehicleId,
+          metadata: {
+            'journeyStatus': 'in_progress',
+            'journeyMode': _journeyMode,
+            'routeOrderVersion': 'mode_ordered_v1',
+            'startedAt': ServerValue.timestamp,
+            'destination': {
+              'latitude': plan.destination.latitude,
+              'longitude': plan.destination.longitude,
+              'label': plan.destination.label,
+            },
+            'routeSnapshot': routeSnapshot,
+            'vehicleRegisterNumber':
+                _currentVehicleData?['registerNumber']?.toString() ?? '',
+            'vehicleCode': _currentVehicleData?['code']?.toString() ?? '',
+          },
+        );
+        if (mounted) {
+          setState(() => _isJourneyActive = true);
+        }
+      }
+
+      final destinationLat = plan.destination.latitude.toStringAsFixed(6);
+      final destinationLng = plan.destination.longitude.toStringAsFixed(6);
+
+      final waypointParam = plan.waypoints
+          .map((waypoint) {
+            final lat = waypoint.point.latitude.toStringAsFixed(6);
+            final lng = waypoint.point.longitude.toStringAsFixed(6);
+            return '$lat,$lng';
+          })
+          .join('|');
+
+      final query = <String, String>{
+        'api': '1',
+        'destination': '$destinationLat,$destinationLng',
+        'travelmode': 'driving',
+      };
+      if (waypointParam.isNotEmpty) {
+        query['waypoints'] = waypointParam;
+      }
+
+      final directionsUri = Uri.https('www.google.com', '/maps/dir/', query);
+      final launched = await launchUrl(
+        directionsUri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Google Maps.')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not start journey navigation.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isOpeningJourney = false);
+    }
+  }
+
+  Future<void> _stopJourney() async {
+    if (_isOpeningJourney || !_isJourneyActive) return;
+
+    setState(() => _isOpeningJourney = true);
+    try {
+      await _locationService.markJourneyEnded();
+      if (!mounted) return;
+      setState(() => _isJourneyActive = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Journey stopped. Live tracking paused.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not stop journey. Try again.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isOpeningJourney = false);
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -49,9 +307,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
       await _locationService.startTracking();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Location error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Location error: $e')));
       }
     }
   }
@@ -63,6 +321,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
         .collection('users')
         .doc(user.uid)
         .get();
+    final driverName = userDoc.data()?['name'] as String?;
     final vehicleId = userDoc.data()?['vehicleId'] as String?;
     if (vehicleId != null && vehicleId.isNotEmpty) {
       final vehicleDoc = await FirebaseFirestore.instance
@@ -70,28 +329,94 @@ class _DriverHomePageState extends State<DriverHomePage> {
           .doc(vehicleId)
           .get();
       if (vehicleDoc.exists) {
+        final inProgress = await _locationService.isJourneyInProgress(
+          vehicleId,
+        );
+        _locationService.setActiveVehicle(
+          vehicleId: vehicleId,
+          driverName: driverName,
+        );
+        if (!mounted) return;
         setState(() {
           _currentVehicleId = vehicleId;
           _currentVehicleData = vehicleDoc.data();
           _isAssignedVehicleExpanded = false;
           _isJoinVehicleExpanded = false;
+          _isJourneyActive = inProgress;
         });
+        _listenToParentNotices(vehicleId);
       } else {
+        _locationService.setActiveVehicle(
+          vehicleId: null,
+          driverName: driverName,
+        );
         setState(() {
           _currentVehicleId = null;
           _currentVehicleData = null;
           _isAssignedVehicleExpanded = false;
           _isJoinVehicleExpanded = false;
+          _isJourneyActive = false;
         });
+        _cancelParentNoticesListener();
       }
     } else {
+      _locationService.setActiveVehicle(
+        vehicleId: null,
+        driverName: driverName,
+      );
       setState(() {
         _currentVehicleId = null;
         _currentVehicleData = null;
         _isAssignedVehicleExpanded = false;
         _isJoinVehicleExpanded = false;
+        _isJourneyActive = false;
       });
+      _cancelParentNoticesListener();
     }
+  }
+
+  void _listenToParentNotices(String vehicleId) {
+    _cancelParentNoticesListener();
+    _isFirstNoticeLoad = true;
+    _seenParentNoticeIds.clear();
+
+    _parentNoticesSubscription = FirebaseFirestore.instance
+        .collection('notices')
+        .where('vanId', isEqualTo: vehicleId)
+        .where('sender', isEqualTo: 'parent')
+        .snapshots()
+        .listen((snapshot) {
+      if (_isFirstNoticeLoad) {
+        for (var doc in snapshot.docs) {
+          _seenParentNoticeIds.add(doc.id);
+        }
+        _isFirstNoticeLoad = false;
+        return;
+      }
+
+      for (var change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          if (!_seenParentNoticeIds.contains(change.doc.id)) {
+            _seenParentNoticeIds.add(change.doc.id);
+            final data = change.doc.data();
+            if (data != null) {
+              final childName = data['childName'] ?? 'A Parent';
+              final message = data['message'] ?? 'Sent you a note.';
+              NotificationService.instance.showNoticeNotification(
+                id: change.doc.id.hashCode & 0x7FFFFFFF,
+                title: 'Note from $childName',
+                body: message.toString(),
+              );
+            }
+          }
+        }
+      }
+    });
+  }
+
+  void _cancelParentNoticesListener() {
+    _parentNoticesSubscription?.cancel();
+    _parentNoticesSubscription = null;
   }
 
   Future<void> _leaveVehicle() async {
@@ -121,13 +446,17 @@ class _DriverHomePageState extends State<DriverHomePage> {
         'vehicleId': null,
       });
       await batch.commit();
+      await _locationService.markJourneyEnded();
+      _locationService.setActiveVehicle(vehicleId: null);
 
       setState(() {
         _currentVehicleId = null;
         _currentVehicleData = null;
         _isAssignedVehicleExpanded = false;
         _isJoinVehicleExpanded = false;
+        _isJourneyActive = false;
       });
+      _cancelParentNoticesListener();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You have left the vehicle.')),
       );
@@ -149,6 +478,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   @override
   void dispose() {
+    _cancelParentNoticesListener();
     _locationService.stopTracking();
     _vehicleCodeController.dispose();
     super.dispose();
@@ -222,6 +552,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
       await FirebaseFirestore.instance.collection('users').doc(uid).update({
         'vehicleId': vehicleId,
       });
+      _locationService.setActiveVehicle(vehicleId: vehicleId, driverName: name);
+      if (mounted) {
+        setState(() => _isJourneyActive = false);
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Successfully joined the vehicle!')),
       );
@@ -232,6 +566,215 @@ class _DriverHomePageState extends State<DriverHomePage> {
         context,
       ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
     }
+  }
+
+  void _onQuickActionTap(String label) {
+    if (label == 'Students') {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const DriverStudentsPage()),
+      );
+    } else if (label == 'Notices') {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const DriverNoticesPage()),
+      );
+    } else if (label == 'Payments') {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const DriverPaymentsPage()),
+      );
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$label section coming soon.')));
+    }
+  }
+
+  Widget _buildQuickActionTile({
+    required IconData icon,
+    required String label,
+    required Color accent,
+    required VoidCallback onTap,
+  }) {
+    final unifiedAccent = blue;
+
+    return Expanded(
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: unifiedAccent.withOpacity(0.28)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0x14001F3F),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: unifiedAccent.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: unifiedAccent, size: 20),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF001F3F),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildJourneyModeSelector() {
+    final isMorning = _journeyMode == 'morning';
+
+    Widget modePill({
+      required String id,
+      required String title,
+      required String subtitle,
+      required IconData icon,
+    }) {
+      final selected = _journeyMode == id;
+
+      return Expanded(
+        child: InkWell(
+          onTap: () => setState(() => _journeyMode = id),
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? const Color(0x1500B894) : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected
+                    ? const Color(0x6600B894)
+                    : const Color(0x26001F3F),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? const Color(0x1F00B894)
+                        : const Color(0x10005792),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 16, color: selected ? teal : blue),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: navy,
+                          fontSize: 12,
+                          fontWeight: selected
+                              ? FontWeight.w800
+                              : FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: navy.withOpacity(0.62),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0x26005792)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.route_rounded, size: 16, color: blue),
+              const SizedBox(width: 6),
+              const Text(
+                'Journey Mode',
+                style: TextStyle(
+                  color: Color(0xFF001F3F),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                isMorning ? 'Morning' : 'Afternoon',
+                style: TextStyle(
+                  color: teal,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              modePill(
+                id: 'morning',
+                title: 'Morning',
+                subtitle: 'Homes -> Schools',
+                icon: Icons.wb_sunny_outlined,
+              ),
+              const SizedBox(width: 10),
+              modePill(
+                id: 'afternoon',
+                title: 'Afternoon',
+                subtitle: 'Schools -> Homes',
+                icon: Icons.nights_stay_outlined,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1260,24 +1803,147 @@ class _DriverHomePageState extends State<DriverHomePage> {
                       ),
                     ),
             ),
+            if (_currentVehicleId != null && _currentVehicleData != null)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPagePadding,
+                  12,
+                  horizontalPagePadding,
+                  0,
+                ),
+                child: Row(
+                  children: [
+                    _buildQuickActionTile(
+                      icon: Icons.groups_rounded,
+                      label: 'Students',
+                      accent: blue,
+                      onTap: () => _onQuickActionTap('Students'),
+                    ),
+                    const SizedBox(width: 10),
+                    _buildQuickActionTile(
+                      icon: Icons.campaign_rounded,
+                      label: 'Notices',
+                      accent: blue,
+                      onTap: () => _onQuickActionTap('Notices'),
+                    ),
+                    const SizedBox(width: 10),
+                    _buildQuickActionTile(
+                      icon: Icons.payments_rounded,
+                      label: 'Payments',
+                      accent: blue,
+                      onTap: () => _onQuickActionTap('Payments'),
+                    ),
+                  ],
+                ),
+              ),
+            if (_currentVehicleId != null && _currentVehicleData != null)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPagePadding,
+                  10,
+                  horizontalPagePadding,
+                  0,
+                ),
+                child: _buildJourneyModeSelector(),
+              ),
             const SizedBox(height: 24),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          if (_locationService.isTracking) {
-            await _locationService.stopTracking();
-          } else {
-            await _startLocationTracking();
-          }
-          if (mounted) setState(() {});
-        },
-        backgroundColor: _locationService.isTracking ? Colors.red : Colors.green,
-        child: Icon(
-          _locationService.isTracking ? Icons.location_off : Icons.location_on,
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: SizedBox(
+            height: 56,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: _isJourneyActive
+                      ? const [Color(0xFF9D0208), Color(0xFFD00000)]
+                      : const [Color(0xFF00355F), Color(0xFF005792)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: (_isJourneyActive ? const Color(0xFFD00000) : navy)
+                        .withOpacity(0.22),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: ElevatedButton.icon(
+                onPressed: _isOpeningJourney
+                    ? null
+                    : _isJourneyActive
+                    ? () => _stopJourney()
+                    : _startJourneyInGoogleMaps,
+                style: ElevatedButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: Colors.transparent,
+                  disabledBackgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                icon: _isOpeningJourney
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        _isJourneyActive
+                            ? Icons.stop_circle_outlined
+                            : Icons.navigation_rounded,
+                        color: Colors.white,
+                      ),
+                label: Text(
+                  _isJourneyActive ? 'Stop Journey' : 'Start Journey',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
+}
+
+class _JourneyPoint {
+  final double latitude;
+  final double longitude;
+  final String label;
+
+  const _JourneyPoint({
+    required this.latitude,
+    required this.longitude,
+    required this.label,
+  });
+}
+
+class _JourneyWaypoint {
+  final _JourneyPoint point;
+  final bool isCheckpoint;
+
+  const _JourneyWaypoint({required this.point, required this.isCheckpoint});
+}
+
+class _JourneyPlan {
+  final _JourneyPoint destination;
+  final List<_JourneyWaypoint> waypoints;
+
+  const _JourneyPlan({required this.destination, required this.waypoints});
 }

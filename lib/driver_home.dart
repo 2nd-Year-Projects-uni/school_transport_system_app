@@ -403,7 +403,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
               final childName = data['childName'] ?? 'A Parent';
               final message = data['message'] ?? 'Sent you a note.';
               NotificationService.instance.showNoticeNotification(
-                id: change.doc.id.hashCode,
+                id: change.doc.id.hashCode & 0x7FFFFFFF,
                 title: 'Note from $childName',
                 body: message.toString(),
               );

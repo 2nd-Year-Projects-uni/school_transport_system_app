@@ -94,15 +94,11 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- Import config.js for firebaseConfig (must be present and gitignored) -->
+    <script src="config.js"></script>
 
     <script>
-        // Use Firebase config
-        const firebaseConfig = {
-            apiKey: "***REMOVED***",
-            authDomain: "school-transport-system-6eb9f.firebaseapp.com",
-            projectId: "school-transport-system-6eb9f",
-            storageBucket: "school-transport-system-6eb9f.firebasestorage.app",
-        };
+        // Use firebaseConfig from config.js
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
@@ -238,7 +234,7 @@
         document.getElementById('logoutBtn').onclick = () => {
             auth.signOut();
         };
-
+    </script>
         // Navigation (Old scripts combined here)
         document.getElementById('driversBtn').onclick = () => {
             window.location.href = 'drivers.html';

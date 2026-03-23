@@ -4,253 +4,234 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vehicles Management - Admin Panel</title>
+
     <link rel="stylesheet" href="drivers.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-</head>
-<body>
-    <div class="admin-layout">
-        <div class="sidebar">
-            <button class="back-btn" onclick="window.location.href='index.html'">
-                <i class="fa-solid fa-arrow-left"></i> Home
-            </button>
-            <h2>Vehicles</h2>
-            <div class="tabs">
-                <button class="tab-btn active" data-tab="pending">Pending (<span id="count-pending">0</span>)</button>
-                <button class="tab-btn" data-tab="approved">Approved (<span id="count-approved">0</span>)</button>
-                <button class="tab-btn" data-tab="declined">Declined (<span id="count-declined">0</span>)</button>
-            </div>
-        </div>
-        
-        <div class="main-content">
-            <!-- Loading State -->
-            <div id="loading" class="loading-spinner">
-                <i class="fa-solid fa-spinner fa-spin"></i> Loading Vehicles...
-            </div>
 
-            <!-- Pending Tab -->
-            <div id="tab-pending" class="tab-content active">
-                <h3>Pending Approvals</h3>
-                <div class="grid-container" id="grid-pending"></div>
-            </div>
-
-            <!-- Approved Tab -->
-            <div id="tab-approved" class="tab-content">
-                <h3>Approved Vehicles</h3>
-                <div class="grid-container" id="grid-approved"></div>
-            </div>
-
-            <!-- Declined Tab -->
-            <div id="tab-declined" class="tab-content">
-                <h3>Declined Vehicles</h3>
-                <div class="grid-container" id="grid-declined"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Image Modal for Fullscreen Photo -->
-    <div id="imageModal" class="modal">
-        <span class="close-modal">&times;</span>
-        <img class="modal-content" id="zoomedImage">
-    </div>
-
-    <!-- Firebase SDK (Compat version) -->
+    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
-    <script>
-        try {
-            // Firebase configuration
-            const firebaseConfig = {
-                apiKey: "***REMOVED***",
-                authDomain: "school-transport-system-6eb9f.firebaseapp.com",
-                projectId: "school-transport-system-6eb9f",
-                storageBucket: "school-transport-system-6eb9f.firebasestorage.app",
-            };
+    <!-- Your config -->
+    <script src="config.js"></script>
+</head>
 
-            firebase.initializeApp(firebaseConfig);
-            const db = firebase.firestore();
-            const auth = firebase.auth();
+<body>
+<div class="admin-layout">
+    
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <button class="back-btn" onclick="window.location.href='index.html'">
+            <i class="fa-solid fa-arrow-left"></i> Home
+        </button>
 
-            const loadingEl = document.getElementById('loading');
-            const gridPending = document.getElementById('grid-pending');
-            const gridApproved = document.getElementById('grid-approved');
-            const gridDeclined = document.getElementById('grid-declined');
+        <h2>Vehicles</h2>
 
-            const countPending = document.getElementById('count-pending');
-            const countApproved = document.getElementById('count-approved');
-            const countDeclined = document.getElementById('count-declined');
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="pending">
+                Pending (<span id="count-pending">0</span>)
+            </button>
 
-            // Must be logged in as an Admin!
-            auth.onAuthStateChanged((user) => {
-                if (!user) {
-                    loadingEl.innerHTML = '<p style="color:red">Access Denied. Please login first.</p>';
-                    setTimeout(() => { window.location.href = 'index.html'; }, 1500);
-                    return;
-                }
-                fetchVehicles();
-            });
+            <button class="tab-btn" data-tab="approved">
+                Approved (<span id="count-approved">0</span>)
+            </button>
 
-            const modal = document.getElementById('imageModal');
-            const zoomedImage = document.getElementById('zoomedImage');
-            const closeModal = document.querySelector('.close-modal');
+            <button class="tab-btn" data-tab="declined">
+                Declined (<span id="count-declined">0</span>)
+            </button>
+        </div>
+    </div>
 
-            closeModal.onclick = () => {
-                modal.classList.remove('show');
-                setTimeout(() => { modal.style.display = 'none'; }, 300);
-            }
-            window.onclick = (e) => {
-                if (e.target === modal) {
-                    modal.classList.remove('show');
-                    setTimeout(() => { modal.style.display = 'none'; }, 300);
-                }
-            }
-            window.openModal = (src) => {
-                modal.style.display = 'flex';
-                setTimeout(() => {
-                    zoomedImage.src = src;
-                    modal.classList.add('show');
-                }, 10);
-            };
+    <!-- Main -->
+    <div class="main-content">
 
-            window.updateVehicleStatus = async (vehicleId, newStatus) => {
-                try {
-                    // newStatus is a string ('approved' or 'declined')
-                    // FLUTTER MOBILE APP REQUIRES vehicle['status'] to be a STRICT BOOLEAN!
-                    let flutterBool = false;
-                    if (newStatus === 'approved') {
-                        flutterBool = true;
-                    }
+        <div id="loading" class="loading-spinner">
+            <i class="fa-solid fa-spinner fa-spin"></i> Loading Vehicles...
+        </div>
 
-                    await db.collection('vehicles').doc(vehicleId).update({
-                        status: flutterBool,         // For Flutter Mobile App (bool)
-                        adminState: newStatus        // For Admin Panel Sorting ('approved' or 'declined')
-                    });
-                } catch(err) {
-                    console.error("Error updating vehicle status:", err);
-                    alert("Failed: " + err.message);
-                }
-            };
+        <div id="tab-pending" class="tab-content active">
+            <h3>Pending Approvals</h3>
+            <div class="grid-container" id="grid-pending"></div>
+        </div>
 
-            function fetchVehicles() {
-                const vehiclesQuery = db.collection('vehicles');
-                
-                vehiclesQuery.onSnapshot((snapshot) => {
-                    loadingEl.style.display = 'none';
-                    
-                    gridPending.innerHTML = '';
-                    gridApproved.innerHTML = '';
-                    gridDeclined.innerHTML = '';
-                    
-                    let pCount = 0;
-                    let aCount = 0;
-                    let dCount = 0;
+        <div id="tab-approved" class="tab-content">
+            <h3>Approved Vehicles</h3>
+            <div class="grid-container" id="grid-approved"></div>
+        </div>
 
-                    snapshot.forEach((doc) => {
-                        const data = doc.data();
-                        const id = doc.id;
-                        
-                        // We rely on adminState string first to differentiate Declined vs Pending,
-                        // and fallback to the boolean 'status' property used by the mobile app.
-                        let currentState = 'pending';
-                        if (data.adminState === 'declined') {
-                            currentState = 'declined';
-                        } else if (data.adminState === 'approved' || data.status === true) {
-                            currentState = 'approved';
-                        } else {
-                            currentState = 'pending'; // Default false
-                        }
+        <div id="tab-declined" class="tab-content">
+            <h3>Declined Vehicles</h3>
+            <div class="grid-container" id="grid-declined"></div>
+        </div>
 
-                        const dateStr = data.createdAt && data.createdAt.toDate ? new Date(data.createdAt.toDate()).toLocaleDateString() : 'N/A';
-                        
-                        let insuranceStr = 'N/A';
-                        if (data.insuranceExpiryDate && data.insuranceExpiryDate.toDate) {
-                            insuranceStr = new Date(data.insuranceExpiryDate.toDate()).toLocaleDateString();
-                        }
-                        
-                        const imgUrl = data.vehiclePhotoUrl || 'https://placehold.co/400x200?text=No+Photo';
-                        
-                        // Parse schools array
-                        let schoolsText = '';
-                        if (data.schools && Array.isArray(data.schools)) {
-                            schoolsText = data.schools.map(s => s.name).join(', ');
-                        }
+    </div>
+</div>
 
-                        const card = document.createElement('div');
-                        card.className = 'driver-card'; // Reusing driver-card class from drivers.css
-                        card.innerHTML = `
-                            <div class="driver-header">
-                                <h4><i class="fa-solid fa-shuttle-van" style="color:#005792;"></i> ${data.registerNumber || 'Unknown Reg.'}</h4>
-                            </div>
-                            <div class="driver-info">
-                                <p><i class="fa-solid fa-gears"></i> Type: ${data.vehicleType || 'Van'} (${data.condition || 'AC'})</p>
-                                <p><i class="fa-solid fa-hashtag"></i> Code: <strong>${data.code || 'None'}</strong></p>
-                                <p><i class="fa-solid fa-school"></i> Schools: <span style="font-size:12px">${schoolsText}</span></p>
-                                <p><i class="fa-solid fa-file-contract"></i> Insurance Exp: <strong style="color: ${new Date() > (data.insuranceExpiryDate?.toDate() || 0) ? 'red' : 'green'};">${insuranceStr}</strong></p>
-                                <p><i class="fa-solid fa-calendar"></i> Registered: ${dateStr}</p>
-                            </div>
-                            <div class="license-images" style="margin-top:10px;">
-                                <div style="flex: 1 1 100%;">
-                                    <img src="${imgUrl}" onclick="openModal('${imgUrl}')" alt="Vehicle Photo" style="height: 140px;">
-                                    <span>Vehicle Photo</span>
-                                </div>
-                            </div>
-                            <div class="actions">
-                                ${currentState === 'pending' ? `
-                                    <button class="btn-approve" onclick="updateVehicleStatus('${id}', 'approved')"><i class="fa-solid fa-check"></i> Approve</button>
-                                    <button class="btn-decline" onclick="updateVehicleStatus('${id}', 'declined')"><i class="fa-solid fa-xmark"></i> Decline</button>
-                                ` : ''}
-                                ${currentState === 'approved' ? `
-                                    <button class="btn-decline" onclick="updateVehicleStatus('${id}', 'declined')"><i class="fa-solid fa-ban"></i> Revoke & Decline</button>
-                                ` : ''}
-                                ${currentState === 'declined' ? `
-                                    <button class="btn-restore" onclick="updateVehicleStatus('${id}', 'approved')"><i class="fa-solid fa-rotate-left"></i> Restore</button>
-                                ` : ''}
-                            </div>
-                        `;
+<!-- Image Modal -->
+<div id="imageModal" class="modal">
+    <span class="close-modal">&times;</span>
+    <img class="modal-content" id="zoomedImage">
+</div>
 
-                        if (currentState === 'pending') {
-                            gridPending.appendChild(card);
-                            pCount++;
-                        } else if (currentState === 'approved') {
-                            gridApproved.appendChild(card);
-                            aCount++;
-                        } else if (currentState === 'declined') {
-                            gridDeclined.appendChild(card);
-                            dCount++;
-                        }
-                    });
+<script>
+try {
 
-                    if(pCount === 0) gridPending.innerHTML = '<p style="color:#777;">No pending vehicle approvals.</p>';
-                    if(aCount === 0) gridApproved.innerHTML = '<p style="color:#777;">No approved vehicles.</p>';
-                    if(dCount === 0) gridDeclined.innerHTML = '<p style="color:#777;">No declined vehicles.</p>';
+    // Init Firebase (ONLY ONCE)
+    firebase.initializeApp(firebaseConfig);
 
-                    countPending.textContent = pCount;
-                    countApproved.textContent = aCount;
-                    countDeclined.textContent = dCount;
-                }, (error) => {
-                    console.error("Firestore error: ", error);
-                    loadingEl.innerHTML = '<p style="color:red"><i class="fa-solid fa-triangle-exclamation"></i> Error loading vehicles: ' + error.message + '</p>';
-                });
-            }
+    const db = firebase.firestore();
+    const auth = firebase.auth();
 
-            // Tab Switching Logic
-            const tabBtns = document.querySelectorAll('.tab-btn');
-            const tabContents = document.querySelectorAll('.tab-content');
+    const loadingEl = document.getElementById('loading');
 
-            tabBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    tabBtns.forEach(b => b.classList.remove('active'));
-                    tabContents.forEach(c => c.classList.remove('active'));
-                    
-                    btn.classList.add('active');
-                    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-                });
-            });
+    const gridPending = document.getElementById('grid-pending');
+    const gridApproved = document.getElementById('grid-approved');
+    const gridDeclined = document.getElementById('grid-declined');
 
-        } catch (e) {
-            document.getElementById('loading').innerHTML = '<p style="color:red">Global Script error: ' + e.message + '</p>';
+    const countPending = document.getElementById('count-pending');
+    const countApproved = document.getElementById('count-approved');
+    const countDeclined = document.getElementById('count-declined');
+
+    // Auth check
+    auth.onAuthStateChanged((user) => {
+        if (!user) {
+            loadingEl.innerHTML = '<p style="color:red">Access Denied. Please login first.</p>';
+            setTimeout(() => window.location.href = 'index.html', 1500);
+            return;
         }
-    </script>
+        fetchVehicles();
+    });
+
+    // Modal
+    const modal = document.getElementById('imageModal');
+    const zoomedImage = document.getElementById('zoomedImage');
+    const closeModal = document.querySelector('.close-modal');
+
+    closeModal.onclick = () => {
+        modal.style.display = 'none';
+    };
+
+    window.onclick = (e) => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    };
+
+    window.openModal = (src) => {
+        modal.style.display = 'flex';
+        zoomedImage.src = src;
+    };
+
+    // Update status
+    window.updateVehicleStatus = async (vehicleId, newStatus) => {
+        try {
+            const flutterBool = newStatus === 'approved';
+
+            await db.collection('vehicles').doc(vehicleId).update({
+                status: flutterBool,
+                adminState: newStatus
+            });
+
+        } catch (err) {
+            console.error(err);
+            alert("Error: " + err.message);
+        }
+    };
+
+    // Fetch vehicles
+    function fetchVehicles() {
+
+        db.collection('vehicles').onSnapshot((snapshot) => {
+
+            loadingEl.style.display = 'none';
+
+            gridPending.innerHTML = '';
+            gridApproved.innerHTML = '';
+            gridDeclined.innerHTML = '';
+
+            let p = 0, a = 0, d = 0;
+
+            snapshot.forEach(doc => {
+
+                const data = doc.data();
+                const id = doc.id;
+
+                let state = 'pending';
+
+                if (data.adminState === 'declined') {
+                    state = 'declined';
+                } else if (data.adminState === 'approved' || data.status === true) {
+                    state = 'approved';
+                }
+
+                const img = data.vehiclePhotoUrl || 'https://placehold.co/400x200';
+
+                const card = document.createElement('div');
+                card.className = 'driver-card';
+
+                card.innerHTML = `
+                    <h4>${data.registerNumber || 'No Reg'}</h4>
+
+                    <img src="${img}" onclick="openModal('${img}')" style="height:140px">
+
+                    <p>${data.vehicleType || 'Vehicle'}</p>
+
+                    <div class="actions">
+                        ${state === 'pending' ? `
+                            <button onclick="updateVehicleStatus('${id}','approved')">Approve</button>
+                            <button onclick="updateVehicleStatus('${id}','declined')">Decline</button>
+                        ` : ''}
+
+                        ${state === 'approved' ? `
+                            <button onclick="updateVehicleStatus('${id}','declined')">Revoke</button>
+                        ` : ''}
+
+                        ${state === 'declined' ? `
+                            <button onclick="updateVehicleStatus('${id}','approved')">Restore</button>
+                        ` : ''}
+                    </div>
+                `;
+
+                if (state === 'pending') {
+                    gridPending.appendChild(card); p++;
+                }
+                else if (state === 'approved') {
+                    gridApproved.appendChild(card); a++;
+                }
+                else {
+                    gridDeclined.appendChild(card); d++;
+                }
+
+            });
+
+            countPending.textContent = p;
+            countApproved.textContent = a;
+            countDeclined.textContent = d;
+
+        });
+    }
+
+    // Tabs
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+
+            btn.classList.add('active');
+            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        });
+    });
+
+} catch (e) {
+    document.getElementById('loading').innerHTML =
+        '<p style="color:red">Error: ' + e.message + '</p>';
+}
+</script>
+
 </body>
 </html>

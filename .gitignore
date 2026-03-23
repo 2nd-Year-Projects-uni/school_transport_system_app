@@ -1,5 +1,7 @@
 # Ignore Firebase service files
 android/app/google-services.json
+# Ignore sensitive admin config
+admin/config.js
 # Miscellaneous
 *.class
 *.log

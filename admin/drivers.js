@@ -1,15 +1,10 @@
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore, collection, query, where, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// Firebase configuration based on your google-services.json
-const firebaseConfig = {
-    apiKey: "***REMOVED***",
-    authDomain: "school-transport-system-6eb9f.firebaseapp.com",
-    projectId: "school-transport-system-6eb9f",
-    storageBucket: "school-transport-system-6eb9f.firebasestorage.app",
-    messagingSenderId: "178202506405",
-    appId: "1:178202506405:web:placeholder_if_needed"
-};
+// Import firebaseConfig from config.js
+// Make sure config.js is present and NOT committed to version control
+import "./config.js";
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

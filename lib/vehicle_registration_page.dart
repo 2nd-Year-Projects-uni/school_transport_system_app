@@ -8,7 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'services/vehicle_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-final String _googleMapsApiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
+final String _googlePlacesApiKey = dotenv.env['GOOGLE_PLACES_API_KEY'] ?? '';
 
 final Color _navy = const Color(0xFF001F3F);
 final Color _blue = const Color(0xFF005792);
@@ -216,7 +216,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
     required bool schoolSearch,
   }) async {
     final String trimmedQuery = query.trim();
-    if (_googleMapsApiKey.isEmpty || trimmedQuery.length < 2) {
+    if (_googlePlacesApiKey.isEmpty || trimmedQuery.length < 2) {
       return [];
     }
 
@@ -240,7 +240,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
         newApiUri,
         headers: <String, String>{
           'Content-Type': 'application/json',
-          'X-Goog-Api-Key': _googleMapsApiKey,
+          'X-Goog-Api-Key': _googlePlacesApiKey,
           'X-Goog-FieldMask':
               'suggestions.placePrediction.place,suggestions.placePrediction.text.text',
         },
@@ -290,7 +290,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
     final Uri legacyUri =
         Uri.https('maps.googleapis.com', '/maps/api/place/autocomplete/json', {
           'input': trimmedQuery,
-          'key': _googleMapsApiKey,
+          'key': _googlePlacesApiKey,
           'types': schoolSearch ? 'establishment' : 'geocode',
           'components': 'country:lk',
           'region': 'lk',
@@ -325,7 +325,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
 
   Future<Map<String, double>?> _fetchPlaceCoordinates(String placeId) async {
     final String trimmedPlaceId = placeId.trim();
-    if (_googleMapsApiKey.isEmpty || trimmedPlaceId.isEmpty) {
+    if (_googlePlacesApiKey.isEmpty || trimmedPlaceId.isEmpty) {
       return null;
     }
 
@@ -337,7 +337,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
       final http.Response newApiResponse = await http.get(
         newApiUri,
         headers: <String, String>{
-          'X-Goog-Api-Key': _googleMapsApiKey,
+          'X-Goog-Api-Key': _googlePlacesApiKey,
           'X-Goog-FieldMask': 'location',
         },
       );
@@ -363,7 +363,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
         <String, String>{
           'place_id': trimmedPlaceId,
           'fields': 'geometry/location',
-          'key': _googleMapsApiKey,
+          'key': _googlePlacesApiKey,
         },
       );
       final http.Response legacyResponse = await http.get(legacyUri);

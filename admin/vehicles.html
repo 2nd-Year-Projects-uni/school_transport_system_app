@@ -61,7 +61,7 @@
         </div>
 
         <div id="tab-declined" class="tab-content">
-            <h3>Declined Vehicles</h3>
+                <!-- Main -->
             <div class="grid-container" id="grid-declined"></div>
         </div>
 
@@ -72,6 +72,17 @@
 <div id="imageModal" class="modal">
     <span class="close-modal">&times;</span>
     <img class="modal-content" id="zoomedImage">
+</div>
+
+<!-- Vehicle Details Modal (moved outside tab content for proper display) -->
+<div id="vehicleDetailsModal" class="modal">
+    <div class="modal-content" style="max-width:500px;padding:32px 24px;position:relative;">
+        <span class="close-modal" id="closeVehicleDetails">&times;</span>
+        <h2>Vehicle Details</h2>
+        <div id="vehicleDetailsContent">
+            <!-- Populated by JS -->
+        </div>
+    </div>
 </div>
 
 <script>
@@ -109,17 +120,17 @@ try {
     const closeModal = document.querySelector('.close-modal');
 
     closeModal.onclick = () => {
-        modal.style.display = 'none';
+        modal.classList.remove('show');
     };
 
     window.onclick = (e) => {
         if (e.target === modal) {
-            modal.style.display = 'none';
+            modal.classList.remove('show');
         }
     };
 
     window.openModal = (src) => {
-        modal.style.display = 'flex';
+        modal.classList.add('show');
         zoomedImage.src = src;
     };
 
@@ -167,31 +178,31 @@ try {
 
                 const img = data.vehiclePhotoUrl || 'https://placehold.co/400x200';
 
+
                 const card = document.createElement('div');
                 card.className = 'driver-card';
-
                 card.innerHTML = `
                     <h4>${data.registerNumber || 'No Reg'}</h4>
-
                     <img src="${img}" onclick="openModal('${img}')" style="height:140px">
-
                     <p>${data.vehicleType || 'Vehicle'}</p>
-
                     <div class="actions">
                         ${state === 'pending' ? `
                             <button onclick="updateVehicleStatus('${id}','approved')">Approve</button>
                             <button onclick="updateVehicleStatus('${id}','declined')">Decline</button>
                         ` : ''}
-
                         ${state === 'approved' ? `
                             <button onclick="updateVehicleStatus('${id}','declined')">Revoke</button>
                         ` : ''}
-
                         ${state === 'declined' ? `
                             <button onclick="updateVehicleStatus('${id}','approved')">Restore</button>
                         ` : ''}
                     </div>
                 `;
+                card.style.cursor = 'pointer';
+                card.addEventListener('click', function(e) {
+                    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'IMG') return;
+                    showVehicleDetailsModal(data, id);
+                });
 
                 if (state === 'pending') {
                     gridPending.appendChild(card); p++;
@@ -212,16 +223,62 @@ try {
         });
     }
 
+
+    // Vehicle Details Modal logic
+    const vehicleDetailsModal = document.getElementById('vehicleDetailsModal');
+    const vehicleDetailsContent = document.getElementById('vehicleDetailsContent');
+    const closeVehicleDetails = document.getElementById('closeVehicleDetails');
+
+    async function showVehicleDetailsModal(data, id) {
+        // Fetch owner info if ownerId exists
+        let ownerInfo = 'Not available';
+        if (data.ownerId) {
+            try {
+                const ownerDoc = await db.collection('vehicle_owners').doc(data.ownerId).get();
+                if (ownerDoc.exists) {
+                    const owner = ownerDoc.data();
+                    ownerInfo = owner.name || owner.email || data.ownerId;
+                } else {
+                    ownerInfo = data.ownerId;
+                }
+            } catch (err) {
+                ownerInfo = data.ownerId;
+            }
+        }
+        // Format insurance expiry
+        let insuranceExp = data.insuranceExpiry ? new Date(data.insuranceExpiry.seconds ? data.insuranceExpiry.seconds * 1000 : data.insuranceExpiry).toLocaleDateString() : 'Not available';
+        // Route info
+        let routeInfo = data.route || data.routeName || 'Not available';
+        // Details
+        let details = data.details || '';
+        vehicleDetailsContent.innerHTML = `
+            <strong>Registration Number:</strong> ${data.registerNumber || 'Not available'}<br>
+            <strong>Owner:</strong> ${ownerInfo}<br>
+            <strong>Vehicle Type:</strong> ${data.vehicleType || 'Not available'}<br>
+            <strong>Route:</strong> ${routeInfo}<br>
+            <strong>Insurance Expiry:</strong> ${insuranceExp}<br>
+            <strong>Other Details:</strong> ${details || 'Not available'}<br>
+        `;
+        vehicleDetailsModal.classList.add('show');
+    }
+
+    closeVehicleDetails.onclick = () => {
+        vehicleDetailsModal.classList.remove('show');
+    };
+    window.onclick = (e) => {
+        if (e.target === vehicleDetailsModal) {
+            vehicleDetailsModal.classList.remove('show');
+        }
+    };
+
     // Tabs
     const tabBtns = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
 
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
-
             tabBtns.forEach(b => b.classList.remove('active'));
             tabContents.forEach(c => c.classList.remove('active'));
-
             btn.classList.add('active');
             document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
         });

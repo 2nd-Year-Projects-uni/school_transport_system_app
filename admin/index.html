@@ -145,6 +145,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const showCreateAdminBtn = document.getElementById('showCreateAdminBtn');
     const createAdminForm = document.getElementById('createAdminForm');
     const createAdminMsg = document.getElementById('createAdminMsg');
+    const submitNewAdminBtn = document.getElementById('submitNewAdminBtn');
+    const newAdminEmail = document.getElementById('newAdminEmail');
+    const newAdminPassword = document.getElementById('newAdminPassword');
+    const backToDashBtn = document.getElementById('backToDashBtn');
 
     // Auth state
     auth.onAuthStateChanged(async (user) => {
@@ -196,6 +200,72 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Logout
     document.getElementById('logoutBtn').onclick = () => auth.signOut();
+    // Show Create Admin form
+    if (showCreateAdminBtn) {
+        showCreateAdminBtn.onclick = () => {
+            dashboardSection.style.display = 'none';
+            createAdminForm.style.display = 'flex';
+            createAdminMsg.textContent = '';
+            createAdminMsg.style.display = 'none';
+            newAdminEmail.value = '';
+            newAdminPassword.value = '';
+        };
+    }
+
+    // Back to dashboard from Create Admin form
+    if (backToDashBtn) {
+        backToDashBtn.onclick = () => {
+            createAdminForm.style.display = 'none';
+            dashboardSection.style.display = 'flex';
+            createAdminMsg.textContent = '';
+            createAdminMsg.style.display = 'none';
+        };
+    }
+
+    // Handle Create Admin submission
+    if (submitNewAdminBtn) {
+        submitNewAdminBtn.onclick = async () => {
+            const email = newAdminEmail.value.trim();
+            const password = newAdminPassword.value;
+            createAdminMsg.style.display = 'none';
+            createAdminMsg.textContent = '';
+
+            if (!email || !password) {
+                createAdminMsg.textContent = 'Please enter email and password.';
+                createAdminMsg.style.display = 'block';
+                return;
+            }
+
+            submitNewAdminBtn.disabled = true;
+            submitNewAdminBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating...';
+            try {
+                // Create user with secondary auth
+                const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+                const newUser = userCredential.user;
+
+                // Add to 'admins' collection in Firestore
+                await db.collection('admins').doc(newUser.uid).set({
+                    email: email,
+                    createdAt: new Date(),
+                    createdBy: auth.currentUser ? auth.currentUser.uid : null,
+                    role: 'admin'
+                });
+
+                createAdminMsg.textContent = 'Admin account created successfully!';
+                createAdminMsg.style.display = 'block';
+                createAdminMsg.style.color = '#059669';
+                newAdminEmail.value = '';
+                newAdminPassword.value = '';
+            } catch (err) {
+                createAdminMsg.textContent = err.message || 'Failed to create admin.';
+                createAdminMsg.style.display = 'block';
+                createAdminMsg.style.color = '#EF4444';
+            } finally {
+                submitNewAdminBtn.disabled = false;
+                submitNewAdminBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Create Admin Account';
+            }
+        };
+    }
 
 });
 </script>

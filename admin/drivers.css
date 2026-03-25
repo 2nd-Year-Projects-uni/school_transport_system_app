@@ -210,8 +210,32 @@ body {
 .modal-content {
     max-width: 90%;
     max-height: 90%;
-    border-radius: 8px;
+    border-radius: 12px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    background: #fff;
+    color: #0a2342;
+    padding: 32px 24px;
+    font-size: 1.08rem;
+    line-height: 1.7;
+}
+
+/* Vehicle Details Modal specific tweaks */
+#vehicleDetailsModal .modal-content {
+    background: #f8fafc;
+    color: #0a2342;
+    border: 2px solid #2e8bc0;
+    font-size: 1.12rem;
+    font-weight: 500;
+}
+#vehicleDetailsContent strong {
+    color: #005792;
+    font-weight: 600;
+    margin-right: 6px;
+}
+#vehicleDetailsContent {
+    margin-top: 18px;
+    font-size: 1.08rem;
+    color: #222;
 }
 
 .close-modal {

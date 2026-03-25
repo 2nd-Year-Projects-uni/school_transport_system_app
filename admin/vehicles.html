@@ -231,33 +231,9 @@ try {
 
     async function showVehicleDetailsModal(data, id) {
         // Fetch owner info if ownerId exists
-        let ownerInfo = 'Not available';
-        if (data.ownerId) {
-            try {
-                const ownerDoc = await db.collection('vehicle_owners').doc(data.ownerId).get();
-                if (ownerDoc.exists) {
-                    const owner = ownerDoc.data();
-                    ownerInfo = owner.name || owner.email || data.ownerId;
-                } else {
-                    ownerInfo = data.ownerId;
-                }
-            } catch (err) {
-                ownerInfo = data.ownerId;
-            }
-        }
-        // Format insurance expiry
-        let insuranceExp = data.insuranceExpiry ? new Date(data.insuranceExpiry.seconds ? data.insuranceExpiry.seconds * 1000 : data.insuranceExpiry).toLocaleDateString() : 'Not available';
-        // Route info
-        let routeInfo = data.route || data.routeName || 'Not available';
-        // Details
-        let details = data.details || '';
         vehicleDetailsContent.innerHTML = `
             <strong>Registration Number:</strong> ${data.registerNumber || 'Not available'}<br>
-            <strong>Owner:</strong> ${ownerInfo}<br>
             <strong>Vehicle Type:</strong> ${data.vehicleType || 'Not available'}<br>
-            <strong>Route:</strong> ${routeInfo}<br>
-            <strong>Insurance Expiry:</strong> ${insuranceExp}<br>
-            <strong>Other Details:</strong> ${details || 'Not available'}<br>
         `;
         vehicleDetailsModal.classList.add('show');
     }
